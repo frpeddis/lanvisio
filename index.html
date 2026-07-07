@@ -194,6 +194,32 @@
   .scan-strip .scan-chip .chip-conf { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.55); margin-left: 2px; }
   @keyframes chipFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
 
+  /* ---------- Top-bar action buttons (capture, share, speak) ---------- */
+  .action-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); color: #fff;
+    font-size: 17px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .action-btn:active { transform: scale(0.92); background: rgba(255,255,255,0.18); }
+  .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .action-btn.speak-active { background: var(--accent-purple); border-color: var(--accent-purple); }
+
+  /* ---------- Toast notification ---------- */
+  .toast {
+    position: absolute; bottom: calc(max(env(safe-area-inset-bottom), 32px) + 90px); left: 50%; transform: translateX(-50%);
+    z-index: 20;
+    padding: 11px 18px; border-radius: 12px;
+    background: rgba(0,0,0,0.85); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    color: #fff; font-size: 13px; font-weight: 600;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    max-width: 80vw; text-align: center;
+  }
+  .toast.visible { opacity: 1; transform: translateX(-50%) translateY(-6px); }
+
   /* ---------- Permission / error screen ---------- */
   .gate {
     position: absolute; inset: 0; z-index: 90;
@@ -221,7 +247,7 @@
   <!-- Transparent layer that captures taps -->
   <div id="tapLayer"></div>
 
-  <!-- Top bar: language toggle, count, power -->
+  <!-- Top bar: language toggle, count, action buttons, power -->
   <div class="top-bar">
     <button class="lang-toggle" id="langBtn" aria-label="Switch language">
       <span id="langLabel">EN</span>
@@ -229,10 +255,12 @@
     </button>
     <div class="spacer"></div>
     <div class="count-badge" id="countBadge">0 objects</div>
+    <button class="action-btn" id="captureBtn" aria-label="Capture photo" title="Capture">📷</button>
+    <button class="action-btn" id="speakBtn" aria-label="Speak object name" title="Speak" disabled>🔊</button>
     <button class="power-btn" id="powerBtn" aria-label="Stop camera">⏹</button>
   </div>
 
-  <!-- Bottom: hint + object info card -->
+  <!-- Bottom: hint + object info card + share button (shown with card) -->
   <div class="bottom-area">
     <div class="object-card" id="objCard">
       <div class="obj-icon" id="objIcon">●</div>
@@ -240,10 +268,14 @@
         <div class="obj-name" id="objName">—</div>
         <div class="obj-meta" id="objMeta">Confidence · 0%</div>
       </div>
+      <button class="action-btn" id="shareBtn" aria-label="Share" style="background:transparent;border:none;width:36px;height:36px;font-size:18px;">📤</button>
       <div class="obj-chip"></div>
     </div>
     <div class="hint" id="hint">Tap a highlighted object</div>
   </div>
+
+  <!-- Toast for transient messages (saved / shared / etc.) -->
+  <div class="toast" id="toast"></div>
 
   <!-- Loading screen -->
   <div class="loader" id="loader">
@@ -255,7 +287,6 @@
 
   <!-- AI-loading badge shown OVER the live camera while model loads in background -->
   <div class="ai-loading-badge" id="aiBadge"><div class="mini-spinner"></div><span id="aiBadgeText">AI loading…</span></div>
-
   <!-- Scan strip: top-3 MobileNet (1000-class) predictions as tappable chips -->
   <div class="scan-strip" id="scanStrip"></div>
 
@@ -750,6 +781,10 @@ const objCard = $("objCard");
 const objIcon = $("objIcon");
 const objName = $("objName");
 const objMeta = $("objMeta");
+const captureBtn = $("captureBtn");
+const shareBtn   = $("shareBtn");
+const speakBtn  = $("speakBtn");
+const toast     = $("toast");
 
 // ---------- Localization helpers ----------
 function t(key) { return (STRINGS[currentLang] || STRINGS.en)[key] || key; }
@@ -1351,7 +1386,7 @@ tapLayer.addEventListener("click", (e) => {
 });
 
 // ---------- Object card ----------
-// Show card for a COCO-SSD detection (has a box, category, color)
+// ---------- Show card for a COCO-SSD detection (has a box, category, color) ----------
 function showObjectCard(d) {
   const cat = CATEGORIES[d.category];
   objName.textContent = translateLabel(d.class);
@@ -1362,6 +1397,9 @@ function showObjectCard(d) {
   objCard.style.setProperty("--card-glow", d.color + "55");
   objCard.classList.add("visible");
   hint.style.opacity = "0";
+  _lastSpoken = "";  // reset so the new object name will be spoken
+  updateSpeakButton();
+  speakCurrent();
 }
 
 // Show card for a MobileNet (ImageNet) classification — no box, just a label
@@ -1370,19 +1408,24 @@ function showImageNetCard(p) {
   objName.textContent = label;
   objMeta.textContent = `${t("confidence")} · ${Math.round(p.probability * 100)}%`;
   objIcon.textContent = imagenetIcon(p.className);
-  // Use a neutral purple/cyan for ImageNet predictions
+  // Use a neutral cyan for ImageNet predictions
   const color = "#64D2FF";
   objCard.style.setProperty("--card-color", color);
   objCard.style.setProperty("--card-color-faded", color + "33");
   objCard.style.setProperty("--card-glow", color + "55");
   objCard.classList.add("visible");
   hint.style.opacity = "0";
+  _lastSpoken = "";
+  updateSpeakButton();
+  speakCurrent();
 }
 
 function hideObjectCard() {
   objCard.classList.remove("visible");
   hint.style.opacity = "1";
   hint.textContent = lastDetections.length === 0 ? t("no_objects") : t("tap_object");
+  _lastSpoken = "";
+  updateSpeakButton();
 }
 
 function updateCountBadge() {
@@ -1392,6 +1435,168 @@ function updateCountBadge() {
   } else {
     countBadge.classList.remove("visible");
   }
+}
+
+// ---------- Toast helper ----------
+let _toastTimer = null;
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("visible");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => toast.classList.remove("visible"), 2200);
+}
+
+// ---------- Photo capture ----------
+// Composes the current video frame + overlay (boxes + labels) onto a fresh canvas
+// and saves it as a PNG download. Falls back to opening in a new tab on iOS Safari.
+async function capturePhoto() {
+  if (!video.videoWidth) { showToast(currentLang === "it" ? "Fotocamera non pronta" : "Camera not ready"); return; }
+  captureBtn.style.opacity = "0.4";
+  try {
+    // Create a canvas at video resolution
+    const cap = document.createElement("canvas");
+    cap.width  = video.videoWidth;
+    cap.height = video.videoHeight;
+    const cctx = cap.getContext("2d");
+    // 1) Draw the video frame
+    cctx.drawImage(video, 0, 0, cap.width, cap.height);
+    // 2) Draw the existing overlay (boxes, labels) on top
+    //    The overlay canvas already matches video resolution.
+    cctx.drawImage(overlay, 0, 0, cap.width, cap.height);
+    // 3) Optional watermark with timestamp + detected count
+    cctx.fillStyle = "rgba(0,0,0,0.6)";
+    cctx.fillRect(0, cap.height - 44, cap.width, 44);
+    cctx.fillStyle = "#fff";
+    cctx.font = `600 ${Math.max(14, cap.width * 0.022)}px -apple-system, system-ui, sans-serif`;
+    cctx.textBaseline = "middle"; cctx.textAlign = "left";
+    const ts = new Date().toLocaleString(currentLang === "it" ? "it-IT" : "en-US");
+    const info = `${lastDetections.length} ${t("objects_in_view")} · ${ts}`;
+    cctx.fillText(info, 12, cap.height - 22);
+
+    // Convert to blob
+    const blob = await new Promise(res => cap.toBlob(res, "image/png", 0.92));
+    if (!blob) throw new Error("toBlob failed");
+
+    // Filename with timestamp
+    const filename = `vision-${Date.now()}.png`;
+
+    // Try Web Share API with files first (works on iOS Safari 15+ + Android)
+    if (navigator.canShare && navigator.canShare({ files: [new File([blob], filename, { type: "image/png" })] })) {
+      try {
+        await navigator.share({
+          files: [new File([blob], filename, { type: "image/png" })],
+          title: "Vision Segmenter",
+          text: selectedDetection
+            ? `${translateLabel(selectedDetection.class)} (${Math.round(selectedDetection.score * 100)}%)`
+            : (lastMobilenet[0] ? translateImageNetLabel(lastMobilenet[0].className) : "")
+        });
+        showToast(currentLang === "it" ? "Foto condivisa" : "Photo shared");
+      } catch (e) {
+        if (e.name !== "AbortError") throw e;
+        // User cancelled — silently ignore
+      }
+    } else {
+      // Fallback: trigger a download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      showToast(currentLang === "it" ? "Foto salvata" : "Photo saved");
+    }
+  } catch (err) {
+    console.error("Capture failed", err);
+    showToast(currentLang === "it" ? "Errore salvataggio" : "Save error");
+  } finally {
+    captureBtn.style.opacity = "1";
+  }
+  if (navigator.vibrate) navigator.vibrate(20);
+}
+
+// ---------- Share (just the object name, no image) ----------
+async function shareObject() {
+  let text = "";
+  if (selectedDetection) {
+    text = `${translateLabel(selectedDetection.class)} (${Math.round(selectedDetection.score * 100)}%)`;
+  } else if (lastMobilenet[0]) {
+    text = `${translateImageNetLabel(lastMobilenet[0].className)} (${Math.round(lastMobilenet[0].probability * 100)}%)`;
+  } else {
+    showToast(currentLang === "it" ? "Niente da condividere" : "Nothing to share");
+    return;
+  }
+  text += ` · Vision Segmenter`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: "Vision Segmenter", text });
+    } else {
+      // Fallback: copy to clipboard
+      await navigator.clipboard.writeText(text);
+      showToast(currentLang === "it" ? "Copiato negli appunti" : "Copied to clipboard");
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") console.warn(e);
+  }
+}
+
+// ---------- Text-to-speech ----------
+// Uses the Web Speech API. Pronounces the selected object name in EN or IT.
+let _ttsEnabled = false;
+let _lastSpoken = "";
+
+function speakObjectName() {
+  if (!("speechSynthesis" in window)) {
+    showToast(currentLang === "it" ? "Sintesi vocale non supportata" : "TTS not supported");
+    return;
+  }
+  // Toggle: if currently speaking, stop and disable auto-speak
+  if (_ttsEnabled) {
+    speechSynthesis.cancel();
+    _ttsEnabled = false;
+    speakBtn.classList.remove("speak-active");
+    showToast(currentLang === "it" ? "Audio disattivato" : "Audio off");
+    return;
+  }
+  // Enable auto-speak + speak current selection immediately
+  _ttsEnabled = true;
+  speakBtn.classList.add("speak-active");
+  showToast(currentLang === "it" ? "Audio attivato" : "Audio on");
+  speakCurrent();
+}
+
+function speakCurrent() {
+  if (!_ttsEnabled || !("speechSynthesis" in window)) return;
+  let text = "";
+  if (selectedDetection) {
+    text = translateLabel(selectedDetection.class);
+  } else if (lastMobilenet[0]) {
+    text = translateImageNetLabel(lastMobilenet[0].className);
+  }
+  if (!text || text === _lastSpoken) return;
+  _lastSpoken = text;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = currentLang === "it" ? "it-IT" : "en-US";
+  u.rate = 1.0; u.pitch = 1.0; u.volume = 1.0;
+  // Try to pick a voice matching the language
+  const voices = speechSynthesis.getVoices();
+  const match = voices.find(v => v.lang === u.lang) || voices.find(v => v.lang.startsWith(currentLang));
+  if (match) u.voice = match;
+  speechSynthesis.speak(u);
+}
+
+// Pre-load voices (Chrome / iOS need this)
+if ("speechSynthesis" in window) {
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+
+// ---------- Wire up buttons ----------
+captureBtn.addEventListener("click", capturePhoto);
+shareBtn.addEventListener("click", shareObject);
+speakBtn.addEventListener("click", speakObjectName);
+
+// Enable speak button once we have any text to speak (card shown OR mobilenet available)
+function updateSpeakButton() {
+  speakBtn.disabled = !(selectedDetection || lastMobilenet.length > 0);
 }
 
 // ---------- Language toggle ----------
