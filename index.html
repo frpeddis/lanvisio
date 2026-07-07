@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Vision Segmenter" />
+<meta name="theme-color" content="#000000" />
+<title>Vision Segmenter</title>
+
+<!-- TensorFlow.js + COCO-SSD model (real-time object detection, 80 classes) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+<style>
+  /* ---------- Reset & base ---------- */
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #000; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; user-select: none;
+    touch-action: manipulation;
+  }
+  :root {
+    --accent-blue: #0A84FF;
+    --accent-purple: #BF5AF2;
+    --glass: rgba(28, 28, 30, 0.6);
+    --glass-border: rgba(255, 255, 255, 0.15);
+  }
+
+  /* ---------- App container ---------- */
+  #app { position: relative; width: 100vw; height: 100vh; height: 100dvh; overflow: hidden; }
+
+  /* ---------- Video & canvas ---------- */
+  #video, #overlay {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  #video { z-index: 1; background: #000; }
+  #overlay { z-index: 2; pointer-events: none; }
+
+  /* Make overlay receive taps on boxes */
+  #tapLayer { position: absolute; inset: 0; z-index: 3; }
+
+  /* ---------- Top bar ---------- */
+  .top-bar {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+    padding: max(env(safe-area-inset-top), 16px) 16px 12px;
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(180deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
+    pointer-events: none;
+  }
+  .top-bar > * { pointer-events: auto; }
+
+  .lang-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 9px 14px; border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); color: #fff;
+    font-size: 13px; font-weight: 700; letter-spacing: 0.5px;
+    cursor: pointer; transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .lang-toggle:active { transform: scale(0.94); background: rgba(255,255,255,0.15); }
+  .lang-toggle .swap { font-size: 11px; opacity: 0.7; }
+
+  .spacer { flex: 1; }
+
+  .count-badge {
+    display: none; padding: 8px 13px; border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    font-size: 12px; font-weight: 600; color: #fff;
+    white-space: nowrap;
+  }
+  .count-badge.visible { display: inline-block; }
+
+  .power-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border); color: #fff;
+    font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .power-btn:active { transform: scale(0.92); background: rgba(255,255,255,0.15); }
+
+  /* ---------- Bottom area ---------- */
+  .bottom-area {
+    position: absolute; bottom: 0; left: 0; right: 0; z-index: 10;
+    padding: 16px 16px max(env(safe-area-inset-bottom), 32px);
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    background: linear-gradient(0deg, rgba(0,0,0,0.55), rgba(0,0,0,0));
+    pointer-events: none;
+  }
+  .bottom-area > * { pointer-events: auto; }
+
+  .hint {
+    padding: 10px 18px; border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.85);
+    transition: opacity 0.3s ease;
+  }
+
+  /* ---------- Object info card ---------- */
+  .object-card {
+    display: none; width: 100%; max-width: 420px;
+    padding: 16px 20px; border-radius: 18px;
+    background: var(--glass); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+    border: 1.5px solid var(--card-color, #fff);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 24px var(--card-glow, transparent);
+    animation: slideUp 0.35s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+  }
+  .object-card.visible { display: flex; align-items: center; gap: 14px; }
+  @keyframes slideUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .obj-icon {
+    flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+    background: var(--card-color-faded, rgba(255,255,255,0.15));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .obj-text { flex: 1; min-width: 0; }
+  .obj-name {
+    font-size: 19px; font-weight: 700; color: #fff; letter-spacing: -0.3px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .obj-meta {
+    margin-top: 3px; font-size: 12px; font-weight: 500; color: rgba(255,255,255,0.65);
+  }
+  .obj-chip { flex-shrink: 0; width: 5px; height: 36px; border-radius: 3px; background: var(--card-color, #fff); }
+
+  /* ---------- Loading screen ---------- */
+  .loader {
+    position: absolute; inset: 0; z-index: 100;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+    background: #000; transition: opacity 0.4s ease;
+  }
+  .loader.hidden { opacity: 0; pointer-events: none; }
+  .spinner {
+    width: 40px; height: 40px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.15); border-top-color: var(--accent-blue);
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loader-text { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.7); text-align: center; padding: 0 32px; }
+
+  /* ---------- Permission / error screen ---------- */
+  .gate {
+    position: absolute; inset: 0; z-index: 90;
+    display: none; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+    padding: 32px; text-align: center; background: #000;
+  }
+  .gate.visible { display: flex; }
+  .gate-icon { font-size: 64px; opacity: 0.4; }
+  .gate-title { font-size: 16px; font-weight: 600; color: #fff; line-height: 1.5; }
+  .gate-btn {
+    padding: 12px 24px; border-radius: 12px; border: none;
+    background: var(--accent-blue); color: #fff;
+    font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: transform 0.15s ease, opacity 0.2s ease;
+  }
+  .gate-btn:active { transform: scale(0.96); }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- Camera video element -->
+  <video id="video" autoplay playsinline muted></video>
+  <!-- Canvas overlay where boxes are drawn -->
+  <canvas id="overlay"></canvas>
+  <!-- Transparent layer that captures taps -->
+  <div id="tapLayer"></div>
+
+  <!-- Top bar: language toggle, count, power -->
+  <div class="top-bar">
+    <button class="lang-toggle" id="langBtn" aria-label="Switch language">
+      <span id="langLabel">EN</span>
+      <span class="swap">⇄</span>
+    </button>
+    <div class="spacer"></div>
+    <div class="count-badge" id="countBadge">0 objects</div>
+    <button class="power-btn" id="powerBtn" aria-label="Stop camera">⏹</button>
+  </div>
+
+  <!-- Bottom: hint + object info card -->
+  <div class="bottom-area">
+    <div class="object-card" id="objCard">
+      <div class="obj-icon" id="objIcon">●</div>
+      <div class="obj-text">
+        <div class="obj-name" id="objName">—</div>
+        <div class="obj-meta" id="objMeta">Confidence · 0%</div>
+      </div>
+      <div class="obj-chip"></div>
+    </div>
+    <div class="hint" id="hint">Tap a highlighted object</div>
+  </div>
+
+  <!-- Loading screen -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div class="loader-text" id="loaderText">Loading AI model…</div>
+  </div>
+
+  <!-- Permission / error gate -->
+  <div class="gate" id="gate">
+    <div class="gate-icon" id="gateIcon">📷</div>
+    <div class="gate-title" id="gateTitle">Camera access is required.</div>
+    <button class="gate-btn" id="gateBtn">Open Settings</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   Vision Segmenter — single-file web app
+   - getUserMedia → back camera
+   - TensorFlow.js + COCO-SSD → 80-class real-time detection
+   - Color-coded borders by category
+   - Tap any highlighted object → name + confidence card
+   - EN / IT toggle with full label translations
+   ============================================================ */
+
+// ---------- Localization ----------
+const STRINGS = {
+  en: {
+    loading_model:    "Loading AI model…",
+    loading_camera:   "Starting camera…",
+    tap_object:       "Tap a highlighted object",
+    no_objects:       "No objects detected",
+    objects_in_view:  "objects in view",
+    confidence:       "Confidence",
+    no_camera:        "Camera access is required. Please enable it in your browser settings and reload.",
+    no_camera_ios:    "Camera access is required. Tap below, then enable Camera for this site in Safari settings.",
+    camera_failed:    "Could not start the camera. Please try another device or browser.",
+    reload:           "Reload",
+    open_settings:    "Open Settings",
+    stopped:          "Camera stopped. Tap to restart.",
+    start:            "Start"
+  },
+  it: {
+    loading_model:    "Caricamento modello IA…",
+    loading_camera:   "Avvio fotocamera…",
+    tap_object:       "Tocca un oggetto evidenziato",
+    no_objects:       "Nessun oggetto rilevato",
+    objects_in_view:  "oggetti in vista",
+    confidence:       "Confidenza",
+    no_camera:        "È richiesto l'accesso alla fotocamera. Abilitalo nelle impostazioni del browser e ricarica.",
+    no_camera_ios:    "È richiesto l'accesso alla fotocamera. Tocca sotto, poi abilita Fotocamera per questo sito nelle impostazioni di Safari.",
+    camera_failed:    "Impossibile avviare la fotocamera. Prova un altro dispositivo o browser.",
+    reload:           "Ricarica",
+    open_settings:    "Apri Impostazioni",
+    stopped:          "Fotocamera fermata. Tocca per riavviare.",
+    start:            "Avvia"
+  }
+};
+
+// Italian translations of the 80 COCO classes
+const IT_LABELS = {
+  person: "persona", bicycle: "bicicletta", car: "automobile", motorcycle: "motocicletta",
+  airplane: "aeroplano", bus: "autobus", train: "treno", truck: "camion", boat: "barca",
+  "traffic light": "semaforo", "fire hydrant": "idrante", "stop sign": "segnale di stop",
+  "parking meter": "parcometro", bench: "panchina", bird: "uccello", cat: "gatto",
+  dog: "cane", horse: "cavallo", sheep: "pecora", cow: "mucca", elephant: "elefante",
+  bear: "orso", zebra: "zebra", giraffe: "giraffa", backpack: "zaino", umbrella: "ombrello",
+  handbag: "borsa", tie: "cravatta", suitcase: "valigia", frisbee: "frisbee", skis: "sci",
+  snowboard: "snowboard", "sports ball": "palla sportiva", kite: "aquilone",
+  "baseball bat": "mazza da baseball", "baseball glove": "guanto da baseball",
+  skateboard: "skateboard", surfboard: "tavola da surf", "tennis racket": "racchetta da tennis",
+  bottle: "bottiglia", "wine glass": "bicchiere da vino", cup: "tazza", fork: "forchetta",
+  knife: "coltello", spoon: "cucchiaio", bowl: "ciotola", banana: "banana", apple: "mela",
+  sandwich: "panino", orange: "arancia", broccoli: "broccoli", carrot: "carota",
+  "hot dog": "hot dog", pizza: "pizza", donut: "ciambella", cake: "torta", chair: "sedia",
+  couch: "divano", "potted plant": "pianta in vaso", bed: "letto", "dining table": "tavolo",
+  toilet: "water", tv: "TV", laptop: "portatile", mouse: "mouse", remote: "telecomando",
+  keyboard: "tastiera", "cell phone": "cellulare", microwave: "microonde", oven: "forno",
+  toaster: "tostapane", sink: "lavandino", refrigerator: "frigorifero", book: "libro",
+  clock: "orologio", vase: "vaso", scissors: "forbici", "teddy bear": "orsacchiotto",
+  "hair drier": "asciugacapelli", toothbrush: "spazzolino"
+};
+
+// Category metadata: each class → category → color + icon
+const CATEGORIES = {
+  person:      { color: "#FF453A", icon: "👤" }, // red
+  vehicle:     { color: "#0A84FF", icon: "🚗" }, // blue
+  animal:      { color: "#30D158", icon: "🐾" }, // green
+  food:        { color: "#FF9F0A", icon: "🍽" }, // orange
+  kitchen:     { color: "#64D2FF", icon: "🍴" }, // cyan
+  furniture:   { color: "#BF5AF2", icon: "🛋" }, // purple
+  electronics: { color: "#5E5CE6", icon: "💻" }, // indigo
+  outdoor:     { color: "#73FB7D", icon: "🌳" }, // light green
+  sports:      { color: "#FFD60A", icon: "⚽" }, // yellow
+  indoor:      { color: "#FF6FED", icon: "📦" }, // pink
+  other:       { color: "#FFD60A", icon: "•"  }  // yellow
+};
+
+function categoryOf(label) {
+  const l = label.toLowerCase();
+  if (l === "person") return "person";
+  if (["bicycle","car","motorcycle","airplane","bus","train","truck","boat"].includes(l)) return "vehicle";
+  if (["bird","cat","dog","horse","sheep","cow","elephant","bear","zebra","giraffe"].includes(l)) return "animal";
+  if (["banana","apple","sandwich","orange","broccoli","carrot","hot dog","pizza","donut","cake"].includes(l)) return "food";
+  if (["bottle","wine glass","cup","fork","knife","spoon","bowl","microwave","oven","toaster","sink","refrigerator"].includes(l)) return "kitchen";
+  if (["chair","couch","potted plant","bed","dining table","toilet"].includes(l)) return "furniture";
+  if (["tv","laptop","mouse","remote","keyboard","cell phone"].includes(l)) return "electronics";
+  if (["traffic light","fire hydrant","stop sign","parking meter","bench"].includes(l)) return "outdoor";
+  if (["frisbee","skis","snowboard","sports ball","kite","baseball bat","baseball glove","skateboard","surfboard","tennis racket"].includes(l)) return "sports";
+  if (["backpack","umbrella","handbag","tie","suitcase","book","clock","vase","scissors","teddy bear","hair drier","toothbrush"].includes(l)) return "indoor";
+  return "other";
+}
+
+// ---------- State ----------
+let currentLang = localStorage.getItem("vs_lang") || "en";
+let model = null;
+let stream = null;
+let detectionLoopRunning = false;
+let lastDetections = [];   // [{ bbox:[x,y,w,h], class, score, category, color }]
+let selectedDetection = null;
+let selectedTimer = null;
+
+// ---------- DOM ----------
+const $ = (id) => document.getElementById(id);
+const video = $("video");
+const overlay = $("overlay");
+const ctx = overlay.getContext("2d");
+const tapLayer = $("tapLayer");
+const loader = $("loader");
+const loaderText = $("loaderText");
+const gate = $("gate");
+const gateIcon = $("gateIcon");
+const gateTitle = $("gateTitle");
+const gateBtn = $("gateBtn");
+const langBtn = $("langBtn");
+const langLabel = $("langLabel");
+const countBadge = $("countBadge");
+const powerBtn = $("powerBtn");
+const hint = $("hint");
+const objCard = $("objCard");
+const objIcon = $("objIcon");
+const objName = $("objName");
+const objMeta = $("objMeta");
+
+// ---------- Localization helpers ----------
+function t(key) { return (STRINGS[currentLang] || STRINGS.en)[key] || key; }
+function translateLabel(label) {
+  if (currentLang === "it") return IT_LABELS[label] || label;
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+function updateStaticTexts() {
+  langLabel.textContent = currentLang.toUpperCase();
+  loaderText.textContent = model ? t("loading_camera") : t("loading_model");
+  if (lastDetections.length === 0) {
+    hint.textContent = detectionLoopRunning ? t("no_objects") : t("tap_object");
+  } else {
+    hint.textContent = t("tap_object");
+  }
+  if (selectedDetection) showObjectCard(selectedDetection);
+}
+
+// ---------- Boot ----------
+async function init() {
+  updateStaticTexts();
+  // Load model first
+  try {
+    loaderText.textContent = t("loading_model");
+    model = await cocoSsd.load({ base: "lite_mobilenet_v2" });
+  } catch (err) {
+    console.error("Model load failed", err);
+    showGate("⚠️", "Could not load the AI model. Check your internet connection and reload.", "Reload", () => location.reload());
+    return;
+  }
+  // Ask for camera
+  await startCamera();
+}
+
+async function startCamera() {
+  loaderText.textContent = t("loading_camera");
+  loader.classList.remove("hidden");
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    // Wait for video dimensions
+    if (!video.videoWidth) {
+      await new Promise(res => video.onloadedmetadata = res);
+      await video.play();
+    }
+    resizeCanvas();
+    loader.classList.add("hidden");
+    detectionLoopRunning = true;
+    powerBtn.textContent = "⏹";
+    detectLoop();
+    updateStaticTexts();
+  } catch (err) {
+    console.error("Camera failed", err);
+    loader.classList.add("hidden");
+    const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    showGate(
+      "📷",
+      isIOS ? t("no_camera_ios") : t("no_camera"),
+      t("reload"),
+      () => location.reload()
+    );
+  }
+}
+
+function stopCamera() {
+  detectionLoopRunning = false;
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null;
+  video.srcObject = null;
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  lastDetections = [];
+  countBadge.classList.remove("visible");
+  powerBtn.textContent = "▶";
+  hint.textContent = t("stopped");
+  hideObjectCard();
+}
+
+function showGate(icon, title, btnText, btnAction) {
+  gateIcon.textContent = icon;
+  gateTitle.textContent = title;
+  gateBtn.textContent = btnText;
+  gateBtn.onclick = btnAction;
+  gate.classList.add("visible");
+}
+
+// ---------- Canvas sizing ----------
+function resizeCanvas() {
+  // Match canvas resolution to video resolution, but displayed via CSS at 100%
+  overlay.width = video.videoWidth || window.innerWidth;
+  overlay.height = video.videoHeight || window.innerHeight;
+}
+window.addEventListener("resize", () => {
+  // We rely on object-fit: cover; the canvas keeps video resolution
+});
+
+// ---------- Detection loop ----------
+async function detectLoop() {
+  if (!detectionLoopRunning || !model || !video.videoWidth) {
+    if (detectionLoopRunning) requestAnimationFrame(detectLoop);
+    return;
+  }
+  try {
+    const predictions = await model.detect(video, 10, 0.5);
+    // Augment with category + color
+    lastDetections = predictions.map(p => {
+      const cat = categoryOf(p.class);
+      return {
+        bbox: p.bbox,           // [x, y, w, h] in video pixel coords
+        class: p.class,
+        score: p.score,
+        category: cat,
+        color: CATEGORIES[cat].color
+      };
+    });
+    drawDetections();
+    updateCountBadge();
+    if (!selectedDetection) updateStaticTexts();
+  } catch (err) {
+    console.warn("Detection error", err);
+  }
+  // Throttle to ~15 fps to keep UI smooth
+  setTimeout(() => requestAnimationFrame(detectLoop), 60);
+}
+
+// ---------- Drawing ----------
+function drawDetections() {
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  for (const d of lastDetections) {
+    const [x, y, w, h] = d.bbox;
+    const isSelected = selectedDetection && selectedDetection === d;
+    const lineWidth = Math.max(2, overlay.width * 0.005);
+
+    // Outer glow shadow
+    ctx.shadowColor = d.color;
+    ctx.shadowBlur = isSelected ? 24 : 12;
+
+    // Solid border
+    ctx.strokeStyle = d.color;
+    ctx.lineWidth = isSelected ? lineWidth * 1.8 : lineWidth;
+    ctx.globalAlpha = isSelected ? 1.0 : 0.85;
+    roundRect(ctx, x, y, w, h, Math.min(12, w * 0.08, h * 0.08));
+    ctx.stroke();
+
+    // Corner ticks
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1.0;
+    drawCornerTicks(ctx, x, y, w, h, d.color, Math.min(w, h) * 0.12, lineWidth);
+
+    // Label background pill (top-left)
+    const label = translateLabel(d.class);
+    const confTxt = " " + Math.round(d.score * 100) + "%";
+    ctx.font = `600 ${Math.max(11, overlay.width * 0.022)}px -apple-system, system-ui, sans-serif`;
+    const labelW = ctx.measureText(label).width;
+    const confW = ctx.measureText(confTxt).width;
+    const pillH = Math.max(18, overlay.width * 0.035);
+    const pillW = labelW + confW + 16;
+    const pillX = x;
+    const pillY = Math.max(0, y - pillH - 4);
+
+    ctx.fillStyle = d.color;
+    roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#000";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "left";
+    ctx.fillText(label, pillX + 8, pillY + pillH / 2);
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(confTxt, pillX + 8 + labelW, pillY + pillH / 2);
+    ctx.globalAlpha = 1.0;
+  }
+  ctx.shadowBlur = 0;
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawCornerTicks(ctx, x, y, w, h, color, len, thick) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = thick * 1.4;
+  ctx.lineCap = "round";
+  // Top-left
+  ctx.beginPath();
+  ctx.moveTo(x, y + len); ctx.lineTo(x, y); ctx.lineTo(x + len, y);
+  ctx.stroke();
+  // Top-right
+  ctx.beginPath();
+  ctx.moveTo(x + w - len, y); ctx.lineTo(x + w, y); ctx.lineTo(x + w, y + len);
+  ctx.stroke();
+  // Bottom-right
+  ctx.beginPath();
+  ctx.moveTo(x + w, y + h - len); ctx.lineTo(x + w, y + h); ctx.lineTo(x + w - len, y + h);
+  ctx.stroke();
+  // Bottom-left
+  ctx.beginPath();
+  ctx.moveTo(x + len, y + h); ctx.lineTo(x, y + h); ctx.lineTo(x, y + h - len);
+  ctx.stroke();
+}
+
+// ---------- Tap handling ----------
+// Tap coordinates are in CSS pixels relative to the viewport.
+// We need to map them to canvas/video pixel coordinates, accounting
+// for the object-fit: cover scaling and centering.
+function mapTapToVideoCoords(clientX, clientY) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  const cw = video.clientWidth, ch = video.clientHeight;
+  // object-fit: cover → scale to fill, crop overflow
+  const scale = Math.max(cw / vw, ch / vh);
+  const renderedW = vw * scale;
+  const renderedH = vh * scale;
+  const offsetX = (cw - renderedW) / 2;
+  const offsetY = (ch - renderedH) / 2;
+  // Convert client coords to video-relative coords
+  const rect = video.getBoundingClientRect();
+  const localX = clientX - rect.left - offsetX;
+  const localY = clientY - rect.top  - offsetY;
+  // Scale back to video pixel coords
+  const vx = localX / scale;
+  const vy = localY / scale;
+  if (vx < 0 || vy < 0 || vx > vw || vy > vh) return null;
+  return { vx, vy };
+}
+
+function handleTap(clientX, clientY) {
+  const coords = mapTapToVideoCoords(clientX, clientY);
+  if (!coords) return;
+  // Find topmost detection containing the tap (prefer higher score)
+  let best = null;
+  for (const d of lastDetections) {
+    const [x, y, w, h] = d.bbox;
+    if (coords.vx >= x && coords.vx <= x + w && coords.vy >= y && coords.vy <= y + h) {
+      if (!best || d.score > best.score) best = d;
+    }
+  }
+  if (best) {
+    selectedDetection = best;
+    showObjectCard(best);
+    drawDetections();
+    if (navigator.vibrate) navigator.vibrate(15);
+    // Auto-hide after 8 seconds
+    clearTimeout(selectedTimer);
+    selectedTimer = setTimeout(() => {
+      selectedDetection = null;
+      hideObjectCard();
+      drawDetections();
+    }, 8000);
+  }
+}
+
+tapLayer.addEventListener("click", (e) => {
+  // Use the first touch/pointer position
+  const x = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0]?.clientX);
+  const y = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0]?.clientY);
+  if (x !== undefined && y !== undefined) handleTap(x, y);
+});
+
+// ---------- Object card ----------
+function showObjectCard(d) {
+  const cat = CATEGORIES[d.category];
+  objName.textContent = translateLabel(d.class);
+  objMeta.textContent = `${t("confidence")} · ${Math.round(d.score * 100)}%`;
+  objIcon.textContent = cat.icon;
+  objCard.style.setProperty("--card-color", d.color);
+  objCard.style.setProperty("--card-color-faded", d.color + "33");
+  objCard.style.setProperty("--card-glow", d.color + "55");
+  objCard.classList.add("visible");
+  hint.style.opacity = "0";
+}
+
+function hideObjectCard() {
+  objCard.classList.remove("visible");
+  hint.style.opacity = "1";
+  hint.textContent = lastDetections.length === 0 ? t("no_objects") : t("tap_object");
+}
+
+function updateCountBadge() {
+  if (lastDetections.length > 0) {
+    countBadge.textContent = `${lastDetections.length} ${t("objects_in_view")}`;
+    countBadge.classList.add("visible");
+  } else {
+    countBadge.classList.remove("visible");
+  }
+}
+
+// ---------- Language toggle ----------
+langBtn.addEventListener("click", () => {
+  currentLang = currentLang === "en" ? "it" : "en";
+  localStorage.setItem("vs_lang", currentLang);
+  updateStaticTexts();
+  drawDetections();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
+
+// ---------- Power button ----------
+powerBtn.addEventListener("click", () => {
+  if (detectionLoopRunning) {
+    stopCamera();
+  } else {
+    startCamera();
+  }
+});
+
+// ---------- Start ----------
+init();
+</script>
+</body>
+</html>
