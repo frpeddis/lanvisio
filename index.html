@@ -171,6 +171,29 @@
     animation: spin 0.9s linear infinite;
   }
 
+  /* ---------- Scan strip (top-3 MobileNet predictions) ---------- */
+  .scan-strip {
+    position: absolute; top: calc(max(env(safe-area-inset-top), 16px) + 56px); left: 16px; right: 16px; z-index: 9;
+    display: flex; gap: 8px; overflow-x: auto; padding: 2px;
+    scrollbar-width: none; -ms-overflow-style: none;
+    pointer-events: none;
+  }
+  .scan-strip::-webkit-scrollbar { display: none; }
+  .scan-strip .scan-chip {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 7px;
+    padding: 7px 13px; border-radius: 999px;
+    background: var(--glass); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    font-size: 13px; font-weight: 600; color: #fff;
+    pointer-events: auto; cursor: pointer;
+    transition: transform 0.15s ease, background 0.2s ease;
+    animation: chipFadeIn 0.3s ease;
+  }
+  .scan-strip .scan-chip:active { transform: scale(0.94); background: rgba(255,255,255,0.18); }
+  .scan-strip .scan-chip .chip-icon { font-size: 15px; }
+  .scan-strip .scan-chip .chip-conf { font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.55); margin-left: 2px; }
+  @keyframes chipFadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+
   /* ---------- Permission / error screen ---------- */
   .gate {
     position: absolute; inset: 0; z-index: 90;
@@ -233,6 +256,9 @@
   <!-- AI-loading badge shown OVER the live camera while model loads in background -->
   <div class="ai-loading-badge" id="aiBadge"><div class="mini-spinner"></div><span id="aiBadgeText">AI loading…</span></div>
 
+  <!-- Scan strip: top-3 MobileNet (1000-class) predictions as tappable chips -->
+  <div class="scan-strip" id="scanStrip"></div>
+
   <!-- Permission / error gate -->
   <div class="gate" id="gate">
     <div class="gate-icon" id="gateIcon">📷</div>
@@ -275,6 +301,11 @@ const COCO_CDNS = [
   "https://unpkg.com/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js",
   "https://storage.googleapis.com/tfjs-models/savedmodel/coco-ssd/coco-ssd.min.js"
 ];
+const MOBILENET_CDNS = [
+  "https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js",
+  "https://unpkg.com/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js",
+  "https://storage.googleapis.com/tfjs-models/savedmodel/mobilenet/mobilenet_v2_1.0_224/model.json"
+];
 
 function loadScript(urls, label) {
   return new Promise((resolve, reject) => {
@@ -310,15 +341,15 @@ function loadScript(urls, label) {
   });
 }
 
-// ---------- Load TFJS + COCO-SSD with fallbacks + parallel loading ----------
+// ---------- Load TFJS + COCO-SSD + MobileNet with fallbacks + parallel loading ----------
 // Pre-warm backend while scripts are still downloading (saves ~200ms)
 async function loadDependencies() {
-  // Load TFJS first (COCO-SSD depends on it)
+  // Load TFJS first (COCO-SSD and MobileNet depend on it)
   if (typeof tf === "undefined") {
     setLoaderSub("TensorFlow.js…");
     await loadScript(TFJS_CDNS, "TensorFlow.js");
   }
-  // Initialize backend AS SOON AS tf is available, in parallel with COCO-SSD script load
+  // Initialize backend AS SOON AS tf is available, in parallel with model libs load
   const backendPromise = (async () => {
     try {
       await tf.setBackend("webgl");
@@ -335,11 +366,16 @@ async function loadDependencies() {
     }
   })();
 
-  // Load COCO-SSD in parallel with backend init
+  // Load COCO-SSD and MobileNet in parallel
+  const tasks = [];
   if (typeof cocoSsd === "undefined") {
-    setLoaderSub("COCO-SSD model lib…");
-    await loadScript(COCO_CDNS, "COCO-SSD");
+    tasks.push(loadScript(COCO_CDNS, "COCO-SSD").then(() => console.log("[loader] coco-ssd ready")));
   }
+  if (typeof mobilenet === "undefined") {
+    tasks.push(loadScript(MOBILENET_CDNS, "MobileNet").then(() => console.log("[loader] mobilenet ready")));
+  }
+  setLoaderSub("Loading model libraries…");
+  await Promise.all(tasks);
   await backendPromise;
 }
 
@@ -408,6 +444,249 @@ const IT_LABELS = {
   "hair drier": "asciugacapelli", toothbrush: "spazzolino"
 };
 
+// Italian translations of common ImageNet classes (MobileNet returns these).
+// ~400 entries covering the most common objects. Unlisted labels fall back to English.
+const IT_IMAGENET = {
+  // Animals — dogs
+  "golden retriever": "Golden Retriever", "labrador retriever": "Labrador Retriever",
+  "german shepherd": "Pastore Tedesco", "poodle": "Barboncino", "chihuahua": "Chihuahua",
+  "pug": "Carlino", "boxer": "Boxer", "husky": "Husky", "border collie": "Border Collie",
+  "beagle": "Beagle", "dachshund": "Bassotto", "doberman": "Dobermann",
+  "shetland sheepdog": "Cane da pastore delle Shetland", "great dane": "Alano",
+  "saint bernard": "San Bernardo", "eskimo dog": "Cane esquimese",
+  "african hunting dog": "Lycaon", "brittany spaniel": "Epagneul Bretone",
+  "welsh springer spaniel": "Springer Spaniel Gallese", "cocker spaniel": "Cocker Spaniel",
+  "sussex spaniel": "Epagneul di Sussex", "irish setter": "Setter Irlandese",
+  "gordon setter": "Setter di Gordon", "standard poodle": "Barboncino standard",
+  "miniature poodle": "Barboncino nano", "toy poodle": "Barboncino toy",
+  "afghan hound": "Levriero Afgano", "basenji": "Basenji", "pembroke": "Welsh Corgi Pembroke",
+  "cardigan": "Welsh Corgi Cardigan", "toy terrier": "Toy Terrier",
+  "yorkshire terrier": "Yorkshire Terrier", "boston bull": "Boston Terrier",
+  "schipperke": "Schipperke", "groenendael": "Pastore Belga Groenendael",
+  "malinois": "Pastore Belga Malinois", "bernese mountain dog": "Bovaro del Bernese",
+  "australian shepherd": "Pastore Australiano", "old english sheepdog": "Bobtail",
+  "bouvier des flandres": "Bovaro delle Fiandre", "rottweiler": "Rottweiler",
+  "german short-haired pointer": "Kurzhaar", "vizsla": "Braco Ungherese",
+  "weimaraner": "Weimaraner", "irish water spaniel": "Spaniel d'acqua irlandese",
+  "curly-coated retriever": "Curly Coated Retriever",
+  // Cats
+  "tabby cat": "Gatto soriano", "siamese cat": "Gatto siamese",
+  "persian cat": "Gatto persiano", "egyptian cat": "Gatto egizio",
+  "lynx": "Lince", "leopard": "Leopardo", "snow leopard": "Leopardo delle nevi",
+  "jaguar": "Giaguaro", "lion": "Leone", "tiger": "Tigre", "cheetah": "Ghepardo",
+  "cougar": "Puma", "mountain lion": "Puma",
+  // Birds
+  "rooster": "Gallo", "hen": "Gallina", "cock": "Gallo", "ostrich": "Struzzo",
+  "brambling": "Fringuello montano", "goldfinch": "Cardellino",
+  "house finch": "Fringuello domestico", "junco": "Junco",
+  "indigo bunting": "Passero indaco", "robin": "Pettirosso", "bulbul": "Bulbul",
+  "jay": "Ghiandaia", "magpie": "Gazza", "kingfisher": "Martin pescatore",
+  "bee eater": "Gruccione", "hornbill": "Bucero", "hummingbird": "Colibrì",
+  "jacamar": "Jacamar", "quail": "Quaglia", "partridge": "Pernice",
+  "grey parrot": "Pappagallo grigio", "macaw": "Ara", "lorikeet": "Lorichetto",
+  "sulphur-crested cockatoo": "Cacatua sulfurea", "black stork": "Cicogna nera",
+  "white stork": "Cicogna bianca", "flamingo": "Fenicottero",
+  "american egret": "Airone americano", "bittern": "Tarabuso", "crane": "Gru",
+  "limpkin": "Aramo", "pelican": "Pellicano", "albatross": "Albatros",
+  "great white shark": "Squalo bianco", "tiger shark": "Squalo tigre",
+  "hammerhead": "Squalo martello", "sturgeon": "Storione", "gar": "Lepisoste",
+  "electric ray": "Torpedine", "loggerhead": "Caretta caretta", "leatherback turtle": "Tartaruga liuto",
+  "mud turtle": "Tartaruga palustre", "terrapin": "Tartaruga d'acqua dolce",
+  "box turtle": "Tartaruga scatola", "banded gecko": "Geco bandeato",
+  "common iguana": "Iguana verde", "american chameleon": "Anolis",
+  "whiptail": "Aspidoscelis", "agama": "Agama", "frilled lizard": "Clamoso",
+  "alligator lizard": "Lucertola alligatore", "gila monster": "Mostro di Gila",
+  "green lizard": "Ramarro", "african chameleon": "Camaleonte africano",
+  "komodo dragon": "Drago di Komodo", "african crocodile": "Coccodrillo del Nilo",
+  "american alligator": "Alligatore americano", "triceratops": "Triceratopo",
+  // Other animals
+  "spider monkey": "Scimmia ragno", "colobus": "Scimmia colobo",
+  "gorilla": "Gorilla", "orangutan": "Orango", "gibbon": "Gibbone",
+  "chimpanzee": "Scimpanzé", "siamang": "Siamango", "guenon": "Guenone",
+  "patas monkey": "Scimmima pattuglia", "baboon": "Babuino",
+  "macaque": "Macaque", "langur": "Langur", "colobus monkey": "Scimmia colobo",
+  "proboscis monkey": "Scimmia dal naso lungo", "marmoset": "Uistitì",
+  "capuchin": "Cappuccino", "howler monkey": "Alouatta",
+  "titi": "Callicebus", "spider monkey": "Scimmia ragno",
+  "rabbit": "Coniglio", "wood rabbit": "Coniglio selvatico", "hare": "Lepre",
+  "angora": "Angora", "hamster": "Criceto", "porcupine": "Porcospino",
+  "fox squirrel": "Scoiattolo volpe", "marmot": "Marmotta",
+  "beaver": "Castoro", "mouse": "Topo", "guinea pig": "Porcellino d'India",
+  "sorrel": "Sauro", "zebra": "Zebra", "horse": "Cavallo", "sorrel horse": "Cavallo sauro",
+  "ox": "Bue", "water buffalo": "Bufalo d'acqua", "bison": "Bisonte",
+  "ram": "Ariete", "ibex": "Stambecco", "wild boar": "Cinghiale",
+  "weasel": "Donnola", "mink": "Visone", "otter": "Lontra",
+  "skunk": "Moffetta", "badger": "Tasso", "armadillo": "Armadillo",
+  "raccoon": "Procione", "koala": "Koala", "wombat": "Wombat",
+  "platypus": "Ornitorinco", "elephant": "Elefante",
+  "indian elephant": "Elefante indiano", "african elephant": "Elefante africano",
+  // Insects
+  "monarch": "Farfalla monarca", "cabbage butterfly": "Pieride",
+  "sulphur butterfly": "Colias", "admiral": "Vanessa", "ringlet": "Maniola",
+  "lycaenid": "Licenide", "juno": "Giunone", "dung beetle": "Scarabeo stercorario",
+  "rhinoceros beetle": "Scarabeo rinoceronte", "ground beetle": "Carabide",
+  "cockroach": "Blatta", "mantid": "Mantide", "cicada": "Cicala",
+  "leafhopper": "Cicalina", "lacewing": "Crisopa", "dragonfly": "Libellula",
+  "damselfly": "Damigella", "walking stick": "Insetto stecco",
+  "cock": "Gallo", "hen": "Gallina",
+  "sea lion": "Leone marino", "dugong": "Dugongo", "sea slug": "Nudibranco",
+  "chiton": "Chitone", "chambered nautilus": "Nautilus",
+  "snail": "Lumaca", "slug": "Lumaca senza guscio", "sea urchin": "Riccio di mare",
+  // Food & drink
+  "espresso": "Espresso", "cup": "Tazza", "eggnog": "Zabaione",
+  "red wine": "Vino rosso", "coffee mug": "Tazza da caffè", "coffee": "Caffè",
+  "tea": "Tè", "wine": "Vino", "beer": "Birra",
+  "pop bottle": "Bottiglia di bibita", "water bottle": "Bottiglia d'acqua",
+  "wine bottle": "Bottiglia di vino", "beer bottle": "Bottiglia di birra",
+  "goblet": "Calice", "champagne": "Champagne",
+  "plate": "Piatto", "plate rack": "Scolapiatti", "tray": "Vassoio",
+  "bowl": "Ciotola", "pitcher": "Brocca", "ladle": "Mestolo",
+  "spatula": "Spatola", "wok": "Wok", "frying pan": "Padella",
+  "caldron": "Calderone", "crock pot": "Pentola a cottura lenta",
+  "cheese": "Formaggio", "pizza": "Pizza", "pretzel": "Bretzel",
+  "hotdog": "Hot dog", "hot pot": "Pentola bollente", "burrito": "Burrito",
+  "guacamole": "Guacamole", "mashed potato": "Purè di patate",
+  "french loaf": "Filone francese", "bagel": "Bagel",
+  "dough": "Impasto", "carbonara": "Carbonara", "spaghetti": "Spaghetti",
+  "ramen": "Ramen", "noodle": "Noodles", "meat loaf": "Polpettone",
+  "steak": "Bistecca", "plate of spaghetti": "Piatto di spaghetti",
+  "ice cream": "Gelato", "ice lolly": "Ghiacciolo",
+  "chocolate sauce": "Salsa al cioccolato", "strawberry": "Fragola",
+  "banana": "Banana", "pineapple": "Ananas", "lemon": "Limone",
+  "orange": "Arancia", "fig": "Fico", "pomegranate": "Melograno",
+  "jackfruit": "Jackfruit", "custard apple": "Annona",
+  "granny smith": "Mela Granny Smith", "corn": "Mais", "acorn": "Ghianda",
+  "cauliflower": "Cavolfiore", "broccoli": "Broccoli", "zucchini": "Zucchina",
+  "cucumber": "Cetriolo", "artichoke": "Carciofo", "bell pepper": "Peperone",
+  "cardoon": "Cardo", "mushroom": "Fungo", "agaric": "Amanita",
+  "bolete": "Boleto",
+  // Household objects
+  "desk": "Scrivania", "dining table": "Tavolo da pranzo",
+  "rocking chair": "Sedia a dondolo", "folding chair": "Sedia pieghevole",
+  "throne": "Trono", "barber chair": "Sedia da barbiere",
+  "studio couch": "Divano", "four-poster": "Letto a baldacchino",
+  "bookcase": "Libreria", "wardrobe": "Armadio", "china cabinet": "Vetrinetta",
+  "file": "Faldone", "pool table": "Tavolo da biliardo",
+  "tub": "Vasca", "washbasin": "Lavandino", "toilet seat": "Asse del water",
+  "shower curtain": "Tendina della doccia", "soap dispenser": "Erogatore di sapone",
+  "pillow": "Cuscino", "sleeping bag": "Sacco a pelo", "quilt": "Trapunta",
+  "lampshade": "Paralume", "candle": "Candela", "chandelier": "Lampadario",
+  "torch": "Torcia", "flashlight": "Torcia elettrica", "lantern": "Lanterna",
+  "doormat": "Zerbino", "screen": "Schermo", "monitor": "Monitor",
+  "television": "Televisione", "crt screen": "Schermo CRT",
+  "laptop": "Portatile", "notebook": "Notebook", "desktop computer": "Computer desktop",
+  "computer keyboard": "Tastiera", "mouse": "Mouse", "modem": "Modem",
+  "hard disc": "Disco rigido", "optical disc": "Disco ottico",
+  "floppy disk": "Dischetto", "cd player": "Lettore CD",
+  "cassette player": "Registratore a cassette", "tape player": "Registratore",
+  "ipod": "iPod", "remote control": "Telecomando", "joystick": "Joystick",
+  "gamepad": "Gamepad", "analog clock": "Orologio analogico",
+  "digital clock": "Orologio digitale", "stopwatch": "Cronometro",
+  "wall clock": "Orologio da parete", "hourglass": "Clessidra", "abacus": "Abaco",
+  "scoreboard": "Tabellone", "cash machine": "Bancomat",
+  "slot machine": "Slot machine", "pinwheel": "Mulinello",
+  "combination lock": "Lucchetto a combinazione", "padlock": "Lucchetto",
+  "chain": "Catena", "chainlink fence": "Recinzione a maglie",
+  "chain mail": "Cotta di maglia", "neck brace": "Collare cervicale",
+  "safety pin": "Spilla di sicurezza", "knot": "Nodo", "hook": "Gancio",
+  "screw": "Vite", "screwdriver": "Cacciavite", "hammer": "Martello",
+  "nail": "Chiodo", "plane": "Pialla", "saw": "Sega", "axe": "Ascia",
+  "hatchet": "Accetta", "chain saw": "Motosega", "plunger": "Sturalavandini",
+  "vacuum": "Aspirapolvere", "iron": "Ferro da stiro",
+  "sewing machine": "Macchina da cucire", "lighter": "Accendino",
+  "matchstick": "Fiammifero", "corkscrew": "Cavatappi", "can opener": "Apriscatole",
+  "strainer": "Colino",
+  // Sports & vehicles
+  "mountain bike": "Mountain bike", "bicycle": "Bicicletta",
+  "unicycle": "Monociclo", "moped": "Ciclomotore", "motor scooter": "Scooter",
+  "minivan": "Monovolume", "limousine": "Limousine", "jeep": "Jeep",
+  "convertible": "Cabriolet", "cab": "Taxi", "sports car": "Auto sportiva",
+  "racer": "Velocipede", "car wheel": "Ruota d'auto", "grille": "Griglia",
+  "model t": "Modello T", "tank": "Carro armato", "amphibian": "Anfibio",
+  "snowplow": "Spostaneve", "fire engine": "Autopompa", "ambulance": "Ambulanza",
+  "police van": "Furgone della polizia", "school bus": "Scuolabus",
+  "trolleybus": "Filobus", "streetcar": "Tram", "passenger car": "Vettura passeggeri",
+  "bullet train": "Treno ad alta velocità", "train": "Treno",
+  "steam locomotive": "Locomotiva a vapore",
+  "electric locomotive": "Locomotiva elettrica", "freighter": "Mercantile",
+  "ocean liner": "Transatlantico", "lifeboat": "Scialuppa",
+  "canoe": "Canoa", "kayak": "Kayak", "catamaran": "Catamarano",
+  "trimaran": "Trimarano", "paddle": "Pagaia", "sailboat": "Barca a vela",
+  "sail": "Vela", "speedboat": "Motoscafo", "airliner": "Aereo di linea",
+  "passenger plane": "Aereo passeggeri", "warplane": "Aereo da guerra",
+  "fighter plane": "Aereo da caccia", "bomber": "Bombardiere",
+  "space shuttle": "Space Shuttle", "rocket": "Razzo", "missile": "Missile",
+  "hang glider": "Deltaplano", "parachute": "Paracadute",
+  "snowmobile": "Motoslitta", "skateboard": "Skateboard",
+  "surfboard": "Tavola da surf",
+  // Clothing
+  "suit": "Completo", "bow tie": "Papillon", "windsor tie": "Cravatta Windsor",
+  "bolo tie": "Cravatta bolo", "sweatshirt": "Felpa", "jersey": "Maglia",
+  "t-shirt": "Maglietta", "polo shirt": "Polo", "stole": "Stola",
+  "fur coat": "Cappotto di pelliccia", "parka": "Parka", "poncho": "Poncho",
+  "miniskirt": "Minigonna", "gown": "Abito lungo", "bikini": "Bikini",
+  "maillot": "Costume intero", "brassiere": "Reggiseno",
+  "bonnet": "Cuffia", "cowboy hat": "Cappello da cowboy", "sombrero": "Sombrero",
+  "mortarboard": "Tocco accademico", "shower cap": "Cuffia da doccia",
+  "helmet": "Casco", "crash helmet": "Casco protettivo",
+  "football helmet": "Casco da football", "ski mask": "Passamontagna",
+  "gas mask": "Maschera antigas", "oxygen mask": "Maschera d'ossigeno",
+  "ski": "Sci", "snowshoe": "Racchetta da neve",
+  "roller skate": "Pattino a rotelle", "ice skate": "Pattino da ghiaccio",
+  "clog": "Zoccolo", "running shoe": "Scarpa da running", "sandal": "Sandalo",
+  "loafer": "Mocassino", "boot": "Stivale",
+  // Nature
+  "valley": "Valle", "alp": "Alpe", "volcano": "Vulcano", "mountain": "Montagna",
+  "cliff": "Scogliera", "promontory": "Promontorio", "sandbar": "Secchiale",
+  "beach": "Spiaggia", "lakeside": "Riva del lago", "seashore": "Litorale",
+  "ocean": "Oceano", "dam": "Diga", "breakwater": "Frangiflutti",
+  "dock": "Molo", "pier": "Ponte", "boathouse": "Capanna per barche",
+  "suspension bridge": "Ponte sospeso", "steel arch bridge": "Ponte ad arco in acciaio",
+  "viaduct": "Viadotto", "rapeseed": "Colza", "daisy": "Margherita",
+  "yellow lady's slipper": "Cypripedium giallo", "pot": "Vaso",
+  "flowerpot": "Vaso da fiori",
+  // Misc
+  "cellular telephone": "Telefono cellulare", "dial telephone": "Telefono a disco",
+  "pay-phone": "Telefono pubblico", "web site": "Sito web",
+  "book jacket": "Sovracoperta", "jigsaw puzzle": "Puzzle",
+  "crossword puzzle": "Cruciverba", "comic book": "Fumetto", "menu": "Menù",
+  "notebook": "Notebook", "binder": "Raccoglitore", "envelope": "Busta",
+  "paper towel": "Asciugamano di carta", "tray": "Vassoio",
+  "restaurant": "Ristorante", "bookshop": "Libreria", "library": "Biblioteca",
+  "church": "Chiesa", "monastery": "Monastero", "palace": "Palazzo",
+  "castle": "Castello", "mansion": "Villa", "bell cote": "Cella campanaria",
+  "barn": "Fienile", "toyshop": "Negozio di giocattoli", "greenhouse": "Serra",
+  "fountain": "Fontana", "obelisk": "Obelisco", "totem pole": "Totem",
+  "street sign": "Cartello stradale", "traffic light": "Semaforo",
+  "parking meter": "Parcometro", "fire screen": "Schermo del camino",
+  "manhole cover": "Chiusino", "potter's wheel": "Tornio da vasaio",
+  "spindle": "Fuso", "loom": "Telaio", "abacus": "Abaco",
+  "groom": "Sposo", "bride": "Sposa", "scuba diver": "Subacqueo",
+  "racket": "Racchetta", "ski": "Sci",
+  "comic book": "Fumetto", "crossword puzzle": "Cruciverba",
+  "wallet": "Portafoglio", "purse": "Borsa", "backpack": "Zaino",
+  "umbrella": "Ombrello", "sunglasses": "Occhiali da sole", "glasses": "Occhiali",
+  "stethoscope": "Stetoscopio", "microphone": "Microfono", "odometer": "Contachilometri",
+  " stopwatch": "Cronometro", "necklace": "Collana", "wig": "Parrucca",
+  "lipstick": "Rossetto", "powder": "Cipria", "face powder": "Cipria viso",
+  "sunscreen": "Crema solare", "band aid": "Cerotto",
+  "dough": "Impasto", "guacamole": "Guacamole", "burrito": "Burrito",
+  "carbonara": "Carbonara", "meat loaf": "Polpettone", "mashed potato": "Purè di patate",
+  "pretzel": "Bretzel", "ice cream": "Gelato", "ice lolly": "Ghiacciolo",
+  "chocolate sauce": "Salsa al cioccolato", "trifle": "Zuppa inglese",
+  "eggnog": "Zabaione",
+  "theatre curtain": "Sipario", "window shade": "Tenda avvolgibile",
+  "doormat": "Zerbino", "nightshirt": "Camicia da notte", "bath towel": "Asciugamano",
+  "teddy bear": "Orsacchiotto",
+  "sea anemone": "Anemone di mare", "brain coral": "Corallo cervello",
+  "conch": "Conchiglia", "snail": "Lumaca", "nail": "Chiodo",
+  "can opener": "Apriscatole", "corkscrew": "Cavatappi", "saltshaker": "Saliera",
+  "wine bottle": "Bottiglia di vino", "beer bottle": "Bottiglia di birra",
+  "water bottle": "Bottiglia d'acqua", "red wine": "Vino rosso",
+  "coffee mug": "Tazza da caffè", "espresso": "Espresso",
+  "eggnog": "Zabaione", "trifle": "Zuppa inglese"
+};
+
 // Category metadata: each class → category → color + icon
 const CATEGORIES = {
   person:      { color: "#FF453A", icon: "👤" }, // red
@@ -440,10 +719,13 @@ function categoryOf(label) {
 
 // ---------- State ----------
 let currentLang = localStorage.getItem("vs_lang") || "en";
-let model = null;
+let model = null;              // COCO-SSD
+let mobilenetModel = null;     // MobileNet (1000-class classifier)
 let stream = null;
 let detectionLoopRunning = false;
-let lastDetections = [];   // [{ bbox:[x,y,w,h], class, score, category, color }]
+let mobilenetLoopRunning = false;
+let lastDetections = [];       // [{ bbox:[x,y,w,h], class, score, category, color }]  (COCO)
+let lastMobilenet = [];        // [{ className, probability }]  (top-3 MobileNet)
 let selectedDetection = null;
 let selectedTimer = null;
 
@@ -471,10 +753,178 @@ const objMeta = $("objMeta");
 
 // ---------- Localization helpers ----------
 function t(key) { return (STRINGS[currentLang] || STRINGS.en)[key] || key; }
+
+// Translate a COCO class label (80 classes)
 function translateLabel(label) {
   if (currentLang === "it") return IT_LABELS[label] || label;
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
+
+// Translate an ImageNet class name from MobileNet.
+// ImageNet labels are like "golden retriever" or "n02099601 golden retriever".
+// We strip the synset ID prefix and look up in IT_IMAGENET.
+function translateImageNetLabel(rawLabel) {
+  // Strip leading synset ID like "n02099601 " if present
+  const clean = rawLabel.replace(/^n\d+\s+/, "").trim();
+  if (currentLang === "it") {
+    return IT_IMAGENET[clean.toLowerCase()] || clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+// Get an emoji icon for an ImageNet label (best-effort heuristic)
+function imagenetIcon(label) {
+  const l = label.toLowerCase();
+  if (l.includes("dog") || l.includes("retriever") || l.includes("terrier") || l.includes("poodle") || l.includes("collie") || l.includes("husky") || l.includes("shepherd")) return "🐶";
+  if (l.includes("cat") || l.includes("tabby") || l.includes("siamese") || l.includes("persian")) return "🐱";
+  if (l.includes("bird") || l.includes("eagle") || l.includes("hawk") || l.includes("owl") || l.includes("parrot") || l.includes("duck") || l.includes("goose") || l.includes("flamingo") || l.includes("rooster") || l.includes("hen") || l.includes("sparrow") || l.includes("robin") || l.includes("finch")) return "🐦";
+  if (l.includes("horse") || l.includes("zebra") || l.includes("donkey") || l.includes("pony")) return "🐴";
+  if (l.includes("cow") || l.includes("ox") || l.includes("buffalo") || l.includes("bison")) return "🐮";
+  if (l.includes("sheep") || l.includes("ram") || l.includes("goat") || l.includes("lamb")) return "🐑";
+  if (l.includes("elephant")) return "🐘";
+  if (l.includes("bear")) return "🐻";
+  if (l.includes("monkey") || l.includes("ape") || l.includes("chimp") || l.includes("gorilla") || l.includes("orangutan") || l.includes("gibbon") || l.includes("baboon") || l.includes("macaque")) return "🐵";
+  if (l.includes("rabbit") || l.includes("hare") || l.includes("bunny")) return "🐰";
+  if (l.includes("fish") || l.includes("shark") || l.includes("salmon") || l.includes("tuna") || l.includes("trout")) return "🐟";
+  if (l.includes("snake") || l.includes("lizard") || l.includes("crocodile") || l.includes("alligator") || l.includes("turtle") || l.includes("frog") || l.includes("toad")) return " reptile".trim() || "🦎";
+  if (l.includes("butterfly") || l.includes("moth") || l.includes("bee") || l.includes("wasp") || l.includes("fly") || l.includes("dragonfly") || l.includes("grasshopper") || l.includes("cricket") || l.includes("beetle") || l.includes("ladybug") || l.includes("ant") || l.includes("spider") || l.includes("scorpion") || l.includes("cockroach")) return "🐛";
+  if (l.includes("pizza") || l.includes("spaghetti") || l.includes("pasta") || l.includes("carbonara") || l.includes("lasagna") || l.includes("risotto")) return "🍝";
+  if (l.includes("bread") || l.includes("bagel") || l.includes("pretzel") || l.includes("loaf") || l.includes("dough") || l.includes("croissant") || l.includes("muffin") || l.includes("scone")) return "🍞";
+  if (l.includes("cake") || l.includes("donut") || l.includes("doughnut") || l.includes("cookie") || l.includes("brownie") || l.includes("cupcake") || l.includes("ice cream") || l.includes("ice lolly") || l.includes("sorbet") || l.includes("trifle") || l.includes("pudding") || l.includes("crème") || l.includes("custard")) return "🍰";
+  if (l.includes("banana")) return "🍌";
+  if (l.includes("apple")) return "🍎";
+  if (l.includes("orange") || l.includes("mandarin") || l.includes("tangerine") || l.includes("lemon") || l.includes("lime") || l.includes("grapefruit")) return "🍊";
+  if (l.includes("strawberry") || l.includes("blueberry") || l.includes("raspberry") || l.includes("blackberry") || l.includes("cranberry")) return "🍓";
+  if (l.includes("pineapple")) return "🍍";
+  if (l.includes("watermelon") || l.includes("melon") || l.includes("cantaloupe") || l.includes("honeydew")) return "🍈";
+  if (l.includes("fig") || l.includes("pomegranate") || l.includes("jackfruit") || l.includes("custard apple")) return "🍑";
+  if (l.includes("corn") || l.includes("maize") || l.includes("wheat") || l.includes("rice") || l.includes("barley") || l.includes("oat")) return "🌾";
+  if (l.includes("broccoli") || l.includes("cauliflower") || l.includes("cabbage") || l.includes("lettuce") || l.includes("spinach") || l.includes("kale") || l.includes("arugula")) return "🥦";
+  if (l.includes("carrot") || l.includes("cucumber") || l.includes("zucchini") || l.includes("eggplant") || l.includes("pumpkin") || l.includes("squash") || l.includes("pepper") || l.includes("chili") || l.includes("onion") || l.includes("garlic") || l.includes("tomato") || l.includes("potato") || l.includes("mushroom") || l.includes("artichoke") || l.includes("asparagus")) return "🥕";
+  if (l.includes("coffee") || l.includes("espresso") || l.includes("cappuccino") || l.includes("tea") || l.includes("matcha")) return "☕";
+  if (l.includes("wine") || l.includes("champagne") || l.includes("red wine") || l.includes("white wine")) return "🍷";
+  if (l.includes("beer") || l.includes("ale") || l.includes("lager")) return "🍺";
+  if (l.includes("cocktail") || l.includes("martini") || l.includes("margarita") || l.includes("mojito") || l.includes("tequila") || l.includes("vodka") || l.includes("whiskey") || l.includes("rum") || l.includes("gin")) return "🍸";
+  if (l.includes("bottle") || l.includes("jug") || l.includes("flask") || l.includes("carafe") || l.includes("decanter") || l.includes("pitcher")) return "🍾";
+  if (l.includes("cup") || l.includes("mug") || l.includes("glass") || l.includes("goblet") || l.includes("chalice") || l.includes("calice")) return "🥃";
+  if (l.includes("car") || l.includes("automobile") || l.includes("sedan") || l.includes("limousine") || l.includes("convertible") || l.includes("jeep") || l.includes("suv") || l.includes("cab") || l.includes("minivan") || l.includes("sports car")) return "🚗";
+  if (l.includes("truck") || l.includes("lorry") || l.includes("pickup") || l.includes("van")) return "🚚";
+  if (l.includes("bus") || l.includes("trolley") || l.includes("tram")) return "🚌";
+  if (l.includes("motorcycle") || l.includes("motorbike") || l.includes("motor scooter") || l.includes("moped")) return "🏍";
+  if (l.includes("bicycle") || l.includes("bike") || l.includes("unicycle") || l.includes("tricycle") || l.includes("mountain bike")) return "🚲";
+  if (l.includes("train") || l.includes("locomotive") || l.includes("tram") || l.includes("subway") || l.includes("metro")) return "🚆";
+  if (l.includes("airplane") || l.includes("plane") || l.includes("airliner") || l.includes("jet") || l.includes("boeing") || l.includes("airbus") || l.includes("warplane") || l.includes("fighter")) return "✈️";
+  if (l.includes("boat") || l.includes("ship") || l.includes("canoe") || l.includes("kayak") || l.includes("yacht") || l.includes("sailboat") || l.includes("catamaran") || l.includes("ferry") || l.includes("ocean liner") || l.includes("lifeboat")) return "⛵";
+  if (l.includes("rocket") || l.includes("space shuttle") || l.includes("missile")) return "🚀";
+  if (l.includes("helicopter") || l.includes("chopper")) return "🚁";
+  if (l.includes("person") || l.includes("man") || l.includes("woman") || l.includes("boy") || l.includes("girl") || l.includes("groom") || l.includes("bride") || l.includes("matoman") || l.includes("police") || l.includes("soldier") || l.includes("fireman") || l.includes("farmer") || l.includes("surgeon") || l.includes("doctor") || l.includes("chef") || l.includes("cook")) return "👤";
+  if (l.includes("computer") || l.includes("desktop") || l.includes("workstation")) return "🖥";
+  if (l.includes("laptop") || l.includes("notebook") || l.includes("ultrabook")) return "💻";
+  if (l.includes("tablet") || l.includes("ipad")) return "📱";
+  if (l.includes("phone") || l.includes("smartphone") || l.includes("iphone") || l.includes("cellphone") || l.includes("cell phone") || l.includes("telephone") || l.includes("dial telephone") || l.includes("pay-phone")) return "📱";
+  if (l.includes("keyboard")) return "⌨️";
+  if (l.includes("mouse") && !l.includes("cat")) return "🖱";
+  if (l.includes("monitor") || l.includes("screen") || l.includes("display") || l.includes("crt") || l.includes("television") || l.includes("tv")) return "📺";
+  if (l.includes("printer") || l.includes("scanner") || l.includes("photocopier")) return "🖨";
+  if (l.includes("camera") || l.includes("dslr") || l.includes("lens")) return "📷";
+  if (l.includes("headphone") || l.includes("earphone") || l.includes("earbud")) return "🎧";
+  if (l.includes("speaker") || l.includes("stereo") || l.includes("microphone") || l.includes("amplifier")) return "🔊";
+  if (l.includes("guitar") || l.includes("banjo") || l.includes("ukulele") || l.includes("mandolin")) return "🎸";
+  if (l.includes("piano") || l.includes("keyboard") && l.includes("piano")) return "🎹";
+  if (l.includes("drum") || l.includes("cymbal") || l.includes("marimba") || l.includes("xylophone") || l.includes("steel drum")) return "🥁";
+  if (l.includes("violin") || l.includes("cello") || l.includes("viola") || l.includes("double bass") || l.includes("harp")) return "🎻";
+  if (l.includes("trumpet") || l.includes("trombone") || l.includes("saxophone") || l.includes("flute") || l.includes("clarinet") || l.includes("harmonica") || l.includes("accordion") || l.includes("bagpipe") || l.includes("oboe") || l.includes("cornet")) return "🎺";
+  if (l.includes("soccer") || l.includes("football") && !l.includes("american")) return "⚽";
+  if (l.includes("basketball")) return "🏀";
+  if (l.includes("baseball")) return "⚾";
+  if (l.includes("tennis") || l.includes("racket")) return "🎾";
+  if (l.includes("volleyball")) return "🏐";
+  if (l.includes("football") || l.includes("rugby")) return "🏈";
+  if (l.includes("golf") || l.includes("putter") || l.includes("iron") && l.includes("golf")) return "⛳";
+  if (l.includes("hockey") || l.includes("puck")) return "🏒";
+  if (l.includes("ski") || l.includes("snowboard") || l.includes("sled") || l.includes("sleigh") || l.includes("toboggan")) return "🎿";
+  if (l.includes("skateboard")) return "🛹";
+  if (l.includes("surfboard") || l.includes("surfer")) return "🏄";
+  if (l.includes("bicycle") || l.includes("cycling")) return "🚴";
+  if (l.includes("pool") || l.includes("billiard") || l.includes("snooker")) return "🎱";
+  if (l.includes("bowling")) return "🎳";
+  if (l.includes("chess") || l.includes("checker") || l.includes("board game") || l.includes("jigsaw") || l.includes("puzzle") || l.includes("crossword") || l.includes("domino")) return "🎲";
+  if (l.includes("chair") || l.includes("throne") || l.includes("stool") || l.includes("armchair") || l.includes("rocking chair") || l.includes("folding chair") || l.includes("barber chair")) return "🪑";
+  if (l.includes("sofa") || l.includes("couch") || l.includes("loveseat") || l.includes("studio couch") || l.includes("daybed") || l.includes("settee")) return "🛋";
+  if (l.includes("bed") || l.includes("mattress") || l.includes("crib") || l.includes("bunk bed") || l.includes("four-poster")) return "🛏";
+  if (l.includes("table") || l.includes("desk") || l.includes("dining table")) return "🍽";
+  if (l.includes("lamp") || l.includes("lantern") || l.includes("torch") || l.includes("chandelier") || l.includes("candle") || l.includes("lighter")) return "💡";
+  if (l.includes("clock") || l.includes("hourglass") || l.includes("stopwatch") || l.includes("sundial") || l.includes("watch")) return "⏰";
+  if (l.includes("book") || l.includes("magazine") || l.includes("comic") || l.includes("novel") || l.includes("dictionary") || l.includes("encyclopedia")) return "📚";
+  if (l.includes("newspaper") || l.includes("journal")) return "📰";
+  if (l.includes("envelope") || l.includes("letter") || l.includes("mail")) return "✉️";
+  if (l.includes("pencil") || l.includes("pen") || l.includes("crayon") || l.includes("marker") || l.includes("fountain pen")) return "✏️";
+  if (l.includes("paintbrush") || l.includes("easel") || l.includes("palette") || l.includes("canvas")) return "🎨";
+  if (l.includes("scissors") || l.includes("shears")) return "✂️";
+  if (l.includes("hammer") || l.includes("mallet") || l.includes("sledgehammer")) return "🔨";
+  if (l.includes("screwdriver") || l.includes("wrench") || l.includes("pliers") || l.includes("spanner")) return "🔧";
+  if (l.includes("saw") || l.includes("chainsaw") || l.includes("hacksaw")) return "🪚";
+  if (l.includes("shovel") || l.includes("spade") || l.includes("trowel")) return "🪏";
+  if (l.includes("ladder")) return "🪜";
+  if (l.includes("umbrella") || l.includes("parasol")) return "☂️";
+  if (l.includes("handbag") || l.includes("purse") || l.includes("wallet") || l.includes("clutch") || l.includes("tote")) return "👜";
+  if (l.includes("backpack") || l.includes("rucksack") || l.includes("knapsack")) return "🎒";
+  if (l.includes("suitcase") || l.includes("trunk") || l.includes("luggage")) return "🧳";
+  if (l.includes("tie") || l.includes("bow tie") || l.includes("cravat")) return "👔";
+  if (l.includes("shirt") || l.includes("t-shirt") || l.includes("jersey") || l.includes("polo") || l.includes("blouse") || l.includes("sweater") || l.includes("sweatshirt")) return "👕";
+  if (l.includes("pants") || l.includes("trousers") || l.includes("jeans") || l.includes("shorts") || l.includes("skirt")) return "👖";
+  if (l.includes("dress") || l.includes("gown") || l.includes("robe") || l.includes("kimono") || l.includes("bikini") || l.includes("maillot") || l.includes("swimsuit") || l.includes("brassiere")) return "👗";
+  if (l.includes("coat") || l.includes("jacket") || l.includes("parka") || l.includes("poncho") || l.includes("fur coat") || l.includes("windbreaker") || l.includes("anorak")) return "🧥";
+  if (l.includes("shoe") || l.includes("sneaker") || l.includes("boot") || l.includes("sandal") || l.includes("loafer") || l.includes("clog") || l.includes("running shoe")) return "👟";
+  if (l.includes("hat") || l.includes("cap") || l.includes("helmet") || l.includes("cowboy hat") || l.includes("sombrero") || l.includes("bonnet") || l.includes("mortarboard")) return "🪖";
+  if (l.includes("mask") || l.includes("gas mask") || l.includes("oxygen mask") || l.includes("ski mask")) return "😷";
+  if (l.includes("glasses") || l.includes("sunglasses") || l.includes("spectacles") || l.includes("lens")) return "👓";
+  if (l.includes("glove") || l.includes("mitten") || l.includes("gauntlet")) return "🧤";
+  if (l.includes("sock") || l.includes("stocking")) return "🧦";
+  if (l.includes("tree") || l.includes("oak") || l.includes("maple") || l.includes("pine") || l.includes("willow") || l.includes("birch") || l.includes("palm")) return "🌳";
+  if (l.includes("flower") || l.includes("rose") || l.includes("tulip") || l.includes("daisy") || l.includes("lily") || l.includes("orchid") || l.includes("sunflower") || l.includes("daffodil") || l.includes("lotus") || l.includes("poppy") || l.includes("iris") || l.includes("lavender")) return "🌸";
+  if (l.includes("leaf") || l.includes("plant") || l.includes("pot") || l.includes("ear") && l.includes("corn")) return "🌿";
+  if (l.includes("mushroom") || l.includes("agaric") || l.includes("bolete")) return "🍄";
+  if (l.includes("mountain") || l.includes("volcano") || l.includes("alp") || l.includes("cliff") || l.includes("canyon") || l.includes("valley") || l.includes("hill")) return "⛰️";
+  if (l.includes("beach") || l.includes("sandbar") || l.includes("seashore") || l.includes("coast") || l.includes("shore")) return "🏖";
+  if (l.includes("ocean") || l.includes("sea") || l.includes("lake") || l.includes("river") || l.includes("waterfall") || l.includes("water")) return "🌊";
+  if (l.includes("forest") || l.includes("jungle") || l.includes("woods")) return "🌲";
+  if (l.includes("cloud") || l.includes("sky") || l.includes("lightning") || l.includes("thunder")) return "☁️";
+  if (l.includes("snow") || l.includes("ice") || l.includes("glacier") || l.includes("iceberg")) return "❄️";
+  if (l.includes("fire") || l.includes("flame") || l.includes("bonfire")) return "🔥";
+  if (l.includes("building") || l.includes("palace") || l.includes("castle") || l.includes("mansion") || l.includes("stupa") || l.includes("monastery") || l.includes("church") || l.includes("cathedral") || l.includes("mosque") || l.includes("temple") || l.includes("barn") || l.includes("greenhouse") || l.includes("library") || l.includes("shop") || l.includes("restaurant")) return "🏛";
+  if (l.includes("house") || l.includes("home") || l.includes("cottage") || l.includes("cabin")) return "🏠";
+  if (l.includes("bridge") || l.includes("viaduct") || l.includes("suspension bridge")) return "🌉";
+  if (l.includes("tower") || l.includes("obelisk")) return "🗼";
+  if (l.includes("fountain")) return "⛲";
+  if (l.includes("street") || l.includes("road") || l.includes("highway") || l.includes("alley")) return "🛣";
+  if (l.includes("traffic light") || l.includes("street sign") || l.includes("stop sign") || l.includes("parking meter")) return "🚦";
+  if (l.includes("fire hydrant")) return "🚒";
+  if (l.includes("mailbox") || l.includes("postbox")) return "📮";
+  if (l.includes("bench") || l.includes("park bench")) return "🪑";
+  if (l.includes("fork") || l.includes("knife") || l.includes("spoon") || l.includes("ladle") || l.includes("spatula")) return "🍴";
+  if (l.includes("plate") || l.includes("tray") || l.includes("bowl") || l.includes("dish")) return "🍽";
+  if (l.includes("bottle") || l.includes("flask")) return "🍾";
+  if (l.includes("wine glass") || l.includes("goblet") || l.includes("chalice")) return "🍷";
+  if (l.includes("cup") || l.includes("mug") || l.includes("coffee mug")) return "☕";
+  if (l.includes("refrigerator") || l.includes("fridge") || l.includes("freezer")) return "❄️";
+  if (l.includes("oven") || l.includes("stove") || l.includes("microwave") || l.includes("toaster") || l.includes("furnace") || l.includes("kiln") || l.includes("caldron") || l.includes("crock pot")) return "🍳";
+  if (l.includes("dishwasher") || l.includes("washing machine") || l.includes("dryer") || l.includes("iron")) return "🧺";
+  if (l.includes("vacuum") || l.includes("broom") || l.includes("mop")) return "🧹";
+  if (l.includes("sink") || l.includes("washbasin") || l.includes("tub") || l.includes("toilet") || l.includes("shower")) return "🚿";
+  if (l.includes("mirror")) return "🪞";
+  if (l.includes("window") || l.includes("door")) return "🚪";
+  if (l.includes("key") || l.includes("lock") || l.includes("padlock") || l.includes("combination lock")) return "🔑";
+  if (l.includes("chain") || l.includes("fence")) return "⛓️";
+  if (l.includes("painting") || l.includes("easel")) return "🖼";
+  if (l.includes("sculpture") || l.includes("statue") || l.includes("bust") || l.includes("totem")) return "🗿";
+  if (l.includes("coin") || l.includes("money") || l.includes("cash") || l.includes("bill")) return "💰";
+  if (l.includes("bank") || l.includes("atm") || l.includes("cash machine") || l.includes("slot machine") || l.includes("vending")) return "🏧";
+  if (l.includes("football stadium") || l.includes("stadium")) return "🏟";
+  if (l.includes("pool") && l.includes("swimming")) return "🏊";
+  return "▪️";
+}
+
 function updateStaticTexts() {
   langLabel.textContent = currentLang.toUpperCase();
   loaderText.textContent = model ? t("loading_camera") : t("loading_model");
@@ -533,29 +983,40 @@ async function init() {
   loader.classList.add("hidden");
   hideAiBadge();
   detectionLoopRunning = true;
+  mobilenetLoopRunning = !!mobilenetModel;
   powerBtn.textContent = "⏹";
   detectLoop();
+  if (mobilenetLoopRunning) mobilenetLoop();
   updateStaticTexts();
 }
 
 // Background model loader — sets _modelReady / _modelError
+// Loads COCO-SSD AND MobileNet in parallel
 async function loadModelInBackground() {
   try {
     await loadDependencies();
 
-    // Try to load from IndexedDB cache first (instant on repeat visits)
-    const cacheKey = "indexeddb://coco-ssd-lite-mobilenet-v2";
-    setLoaderSub(currentLang === "it" ? "Caricamento modello (cache)…" : "Loading model (cache)…");
-
-    // Race: model load vs 60s timeout (model is ~7MB first time, ~0ms after cache)
-    const modelPromise = cocoSsd.load({ base: "lite_mobilenet_v2" });
+    setLoaderSub(currentLang === "it" ? "Caricamento modelli…" : "Loading models…");
+    // Race: model load vs 60s timeout
     const timeoutPromise = new Promise((_, reject) =>
       setTimeout(() => reject(new Error("Model load timeout (60s)")), 60000)
     );
-    model = await Promise.race([modelPromise, timeoutPromise]);
 
+    // Load both models in parallel (they don't depend on each other)
+    const cocoPromise = cocoSsd.load({ base: "lite_mobilenet_v2" })
+      .then(m => { console.log("[model] coco-ssd loaded"); model = m; });
+    const mobilenetPromise = mobilenet.load({ version: 2, alpha: 1.0 })
+      .then(m => { console.log("[model] mobilenet loaded"); mobilenetModel = m; })
+      .catch(err => { console.warn("[model] mobilenet failed (continuing with COCO only)", err); });
+
+    await Promise.race([
+      Promise.all([cocoPromise, mobilenetPromise]),
+      timeoutPromise
+    ]);
+
+    if (!model) throw new Error("COCO-SSD failed to load");
     _modelReady = true;
-    console.log("[model] loaded, backend:", tf.getBackend());
+    console.log("[model] ready — coco:", !!model, "mobilenet:", !!mobilenetModel, "backend:", tf.getBackend());
   } catch (err) {
     console.error("[model] load failed", err);
     _modelError = err;
@@ -589,13 +1050,16 @@ async function startCameraInBackground() {
 
 function stopCamera() {
   detectionLoopRunning = false;
+  mobilenetLoopRunning = false;
   if (stream) stream.getTracks().forEach(t => t.stop());
   stream = null;
   video.srcObject = null;
   ctx.clearRect(0, 0, overlay.width, overlay.height);
   lastDetections = [];
+  lastMobilenet = [];
   countBadge.classList.remove("visible");
-  powerBtn.textContent = "▶";
+  updateScanStrip();
+  powerBtn.textContent = "▶"
   hint.textContent = t("stopped");
   hideObjectCard();
 }
@@ -692,6 +1156,44 @@ async function detectLoop() {
   }
   // Adaptive throttle: ~20 FPS when device can keep up
   setTimeout(() => requestAnimationFrame(detectLoop), 50);
+}
+
+// ---------- MobileNet loop (1000-class classification, ~3 Hz) ----------
+// Runs in parallel with the COCO-SSD detection loop. Throttled to 350ms so it
+// doesn't compete for GPU time. Updates the scan-strip with top-3 predictions.
+async function mobilenetLoop() {
+  if (!mobilenetLoopRunning || !mobilenetModel || !video.videoWidth) {
+    if (mobilenetLoopRunning) setTimeout(mobilenetLoop, 350);
+    return;
+  }
+  try {
+    // mobilenet.classify returns top 3 (or topN) predictions with className + probability
+    const preds = await mobilenetModel.classify(video, 3);
+    // Filter low-confidence ones (<15%) to avoid noise
+    lastMobilenet = preds.filter(p => p.probability >= 0.15);
+    updateScanStrip();
+  } catch (err) {
+    console.warn("MobileNet error", err);
+  }
+  setTimeout(mobilenetLoop, 350);  // ~3 Hz
+}
+
+// ---------- Scan-strip UI (top-3 MobileNet chips) ----------
+function updateScanStrip() {
+  const strip = document.getElementById("scanStrip");
+  strip.innerHTML = "";
+  for (const p of lastMobilenet.slice(0, 3)) {
+    const chip = document.createElement("div");
+    chip.className = "scan-chip";
+    chip.innerHTML = `<span class="chip-icon">${imagenetIcon(p.className)}</span>` +
+      `<span class="chip-label">${translateImageNetLabel(p.className)}</span>` +
+      `<span class="chip-conf">${Math.round(p.probability * 100)}%</span>`;
+    chip.addEventListener("click", () => {
+      showImageNetCard(p);
+      if (navigator.vibrate) navigator.vibrate(12);
+    });
+    strip.appendChild(chip);
+  }
 }
 
 // ---------- Drawing ----------
@@ -808,26 +1310,35 @@ function mapTapToVideoCoords(clientX, clientY) {
 
 function handleTap(clientX, clientY) {
   const coords = mapTapToVideoCoords(clientX, clientY);
-  if (!coords) return;
-  // Find topmost detection containing the tap (prefer higher score)
+  // Find topmost COCO detection containing the tap (prefer higher score)
   let best = null;
-  for (const d of lastDetections) {
-    const [x, y, w, h] = d.bbox;
-    if (coords.vx >= x && coords.vx <= x + w && coords.vy >= y && coords.vy <= y + h) {
-      if (!best || d.score > best.score) best = d;
+  if (coords) {
+    for (const d of lastDetections) {
+      const [x, y, w, h] = d.bbox;
+      if (coords.vx >= x && coords.vx <= x + w && coords.vy >= y && coords.vy <= y + h) {
+        if (!best || d.score > best.score) best = d;
+      }
     }
   }
   if (best) {
+    // Hit a COCO box → show that object card
     selectedDetection = best;
     showObjectCard(best);
     drawDetections();
     if (navigator.vibrate) navigator.vibrate(15);
-    // Auto-hide after 8 seconds
     clearTimeout(selectedTimer);
     selectedTimer = setTimeout(() => {
       selectedDetection = null;
       hideObjectCard();
       drawDetections();
+    }, 8000);
+  } else if (lastMobilenet.length > 0) {
+    // No COCO box hit → fall back to MobileNet top-1 prediction for the whole frame
+    showImageNetCard(lastMobilenet[0]);
+    if (navigator.vibrate) navigator.vibrate(12);
+    clearTimeout(selectedTimer);
+    selectedTimer = setTimeout(() => {
+      hideObjectCard();
     }, 8000);
   }
 }
@@ -840,6 +1351,7 @@ tapLayer.addEventListener("click", (e) => {
 });
 
 // ---------- Object card ----------
+// Show card for a COCO-SSD detection (has a box, category, color)
 function showObjectCard(d) {
   const cat = CATEGORIES[d.category];
   objName.textContent = translateLabel(d.class);
@@ -848,6 +1360,21 @@ function showObjectCard(d) {
   objCard.style.setProperty("--card-color", d.color);
   objCard.style.setProperty("--card-color-faded", d.color + "33");
   objCard.style.setProperty("--card-glow", d.color + "55");
+  objCard.classList.add("visible");
+  hint.style.opacity = "0";
+}
+
+// Show card for a MobileNet (ImageNet) classification — no box, just a label
+function showImageNetCard(p) {
+  const label = translateImageNetLabel(p.className);
+  objName.textContent = label;
+  objMeta.textContent = `${t("confidence")} · ${Math.round(p.probability * 100)}%`;
+  objIcon.textContent = imagenetIcon(p.className);
+  // Use a neutral purple/cyan for ImageNet predictions
+  const color = "#64D2FF";
+  objCard.style.setProperty("--card-color", color);
+  objCard.style.setProperty("--card-color-faded", color + "33");
+  objCard.style.setProperty("--card-glow", color + "55");
   objCard.classList.add("visible");
   hint.style.opacity = "0";
 }
@@ -873,6 +1400,7 @@ langBtn.addEventListener("click", () => {
   localStorage.setItem("vs_lang", currentLang);
   updateStaticTexts();
   drawDetections();
+  updateScanStrip();  // re-translate chips
   if (navigator.vibrate) navigator.vibrate(8);
 });
 
