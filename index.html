@@ -722,6 +722,291 @@ const IT_IMAGENET = {
   "eggnog": "Zabaione", "trifle": "Zuppa inglese"
 };
 
+// ---------- CLIP vocabulary (500+ common objects, EN + IT) ----------
+// CLIP is zero-shot: it can classify an image against ANY set of text labels.
+// We provide a curated list of 500+ everyday objects — far more useful than
+// ImageNet's 1000 classes (many of which are obscure animal breeds).
+// Format: ["english label", "italian label"]
+const VOCABULARY = [
+  // People
+  ["person","persona"],["man","uomo"],["woman","donna"],["boy","ragazzo"],["girl","ragazza"],
+  ["child","bambino"],["baby","neonato"],["family","famiglia"],["crowd","folla"],
+  // Animals — pets
+  ["dog","cane"],["puppy","cucciolo"],["cat","gatto"],["kitten","gattino"],["rabbit","coniglio"],
+  ["hamster","criceto"],["guinea pig","porcellino d'india"],["parrot","pappagallo"],["fish","pesce"],
+  ["goldfish","pesce rosso"],["turtle","tartaruga"],["snake","serpente"],["lizard","lucertola"],
+  ["iguana","iguana"],["chameleon","camaleonte"],["frog","rana"],["mouse","topo"],
+  // Animals — farm & wild
+  ["horse","cavallo"],["cow","mucca"],["sheep","pecora"],["goat","capra"],["pig","maiale"],
+  ["chicken","pollo"],["rooster","gallo"],["hen","gallina"],["duck","anatra"],["goose","oca"],
+  ["turkey","tacchino"],["donkey","asino"],["llama","lama"],["alpaca","alpaca"],
+  // Animals — wild
+  ["deer","cervo"],["bear","orso"],["fox","volpe"],["wolf","lupo"],["lion","leone"],
+  ["tiger","tigre"],["leopard","leopardo"],["cheetah","ghepardo"],["zebra","zebra"],
+  ["giraffe","giraffa"],["elephant","elefante"],["rhinoceros","rinoceronte"],["hippopotamus","ippopotamo"],
+  ["monkey","scimmia"],["gorilla","gorilla"],["chimpanzee","scimpanzé"],["kangaroo","canguro"],
+  ["panda","panda"],["koala","koala"],["squirrel","scoiattolo"],["hedgehog","riccio"],
+  ["bat","pipistrello"],["seal","foca"],["whale","balena"],["dolphin","delfino"],["shark","squalo"],
+  ["octopus","polpo"],["crab","granchio"],["lobster","aragosta"],["shrimp","gambero"],
+  ["jellyfish","medusa"],["starfish","stella marina"],["coral","corallo"],
+  // Animals — birds
+  ["bird","uccello"],["eagle","aquila"],["hawk","falco"],["owl","gufo"],["pigeon","piccione"],
+  ["sparrow","passero"],["robin","pettirosso"],["crow","corvo"],["swan","cigno"],
+  ["flamingo","fenicottero"],["penguin","pinguino"],["ostrich","struzzo"],["peacock","pavone"],
+  // Animals — insects
+  ["butterfly","farfalla"],["bee","ape"],["wasp","vespa"],["ant","formica"],["spider","ragno"],
+  ["ladybug","coccinella"],["dragonfly","libellula"],["cricket","grillo"],["grasshopper","cavalletta"],
+  ["beetle","scarabeo"],["snail","lumaca"],["worm","verme"],
+  // Fruit
+  ["apple","mela"],["banana","banana"],["orange","arancia"],["lemon","limone"],["lime","lime"],
+  ["grapefruit","pompelmo"],["strawberry","fragola"],["blueberry","mirtillo"],["raspberry","lampone"],
+  ["blackberry","mora"],["grape","uva"],["watermelon","anguria"],["melon","melone"],
+  ["pineapple","ananas"],["mango","mango"],["papaya","papaia"],["kiwi","kiwi"],["peach","pesca"],
+  ["plum","prugna"],["cherry","ciliegia"],["pear","pera"],["fig","fico"],["pomegranate","melograno"],
+  ["avocado","avocado"],["coconut","cocco"],["date","dattero"],["apricot","albicocca"],
+  ["nectarine","nettarina"],["tangerine","mandarino"],["persimmon","cachi"],
+  // Vegetables
+  ["tomato","pomodoro"],["potato","patata"],["carrot","carota"],["onion","cipolla"],
+  ["garlic","aglio"],["lettuce","lattuga"],["cabbage","cavolo"],["spinach","spinaci"],
+  ["broccoli","broccoli"],["cauliflower","cavolfiore"],["cucumber","cetriolo"],["zucchini","zucchina"],
+  ["eggplant","melanzana"],["bell pepper","peperone"],["chili pepper","peperoncino"],
+  ["corn","mais"],["pumpkin","zucca"],["squash","zucca"],["mushroom","fungo"],["artichoke","carciofo"],
+  ["asparagus","asparagi"],["celery","sedano"],["radish","ravanello"],["beetroot","barbabietola"],
+  ["turnip","rapa"],["leek","porro"],["fennel","finocchio"],["green beans","fagiolini"],
+  ["peas","piselli"],["olive","oliva"],
+  // Food — prepared
+  ["bread","pane"],["baguette","baguette"],["bagel","bagel"],["croissant","cornetto"],
+  ["pretzel","brezel"],["donut","ciambella"],["cake","torta"],["cupcake","muffin"],
+  ["cookie","biscotto"],["biscuit","biscotto"],["chocolate","cioccolato"],["candy","caramella"],
+  ["ice cream","gelato"],["popsicle","ghiacciolo"],["yogurt","yogurt"],["pudding","budino"],
+  ["pie","torta"],["pizza","pizza"],["pasta","pasta"],["spaghetti","spaghetti"],
+  ["lasagna","lasagna"],["risotto","risotto"],["noodles","noodles"],["ramen","ramen"],
+  ["sushi","sushi"],["sandwich","panino"],["hamburger","hamburger"],["hot dog","hot dog"],
+  ["taco","taco"],["burrito","burrito"],["salad","insalata"],["soup","zuppa"],
+  ["steak","bistecca"],["sausage","salsiccia"],["bacon","bacon"],["chicken wings","ali di pollo"],
+  ["fish fillet","filetto di pesce"],["shrimp dish","gamberetti"],["cheese","formaggio"],
+  ["butter","burro"],["egg","uovo"],["fried egg","uovo fritto"],["omelette","frittata"],
+  ["rice","riso"],["french fries","patatine fritte"],["popcorn","popcorn"],
+  ["chocolate bar","barretta di cioccolato"],["honey","miele"],["jam","marmellata"],
+  ["peanut butter","burro di arachidi"],["nutella","nutella"],
+  // Drinks
+  ["water","acqua"],["coffee","caffè"],["espresso","espresso"],["cappuccino","cappuccino"],
+  ["tea","tè"],["green tea","tè verde"],["beer","birra"],["wine","vino"],["red wine","vino rosso"],
+  ["white wine","vino bianco"],["champagne","champagne"],["cocktail","cocktail"],
+  ["juice","succo"],["orange juice","spremuta"],["soda","bibita"],["cola","cola"],
+  ["smoothie","frullato"],["milkshake","milkshake"],["milk","latte"],["hot chocolate","cioccolata calda"],
+  ["soup bowl","scodella di zuppa"],["broth","brodo"],
+  // Household — furniture
+  ["chair","sedia"],["armchair","poltrona"],["rocking chair","sedia a dondolo"],
+  ["stool","sgabello"],["bench","panca"],["sofa","divano"],["couch","divano"],
+  ["loveseat","divanetto"],["ottoman","pouf"],["bed","letto"],["bunk bed","letto a castello"],
+  ["crib","culla"],["mattress","materasso"],["desk","scrivania"],["table","tavolo"],
+  ["dining table","tavolo da pranzo"],["coffee table","tavolino"],["nightstand","comodino"],
+  ["dresser","comodino"],["wardrobe","armadio"],["closet","armadio"],["bookshelf","libreria"],
+  ["cabinet","mobile"],["cupboard","credenza"],["drawer","cassetto"],["shelf","scaffale"],
+  ["door","porta"],["window","finestra"],["curtain","tenda"],["blinds","veneziane"],
+  ["rug","tappeto"],["carpet","moquette"],["mirror","specchio"],["picture frame","cornice"],
+  ["painting","dipinto"],["poster","poster"],["clock","orologio"],["wall clock","orologio da parete"],
+  ["alarm clock","sveglia"],["candle","candela"],["vase","vaso"],["flowerpot","vaso da fiori"],
+  ["lamp","lampada"],["desk lamp","lampada da scrivania"],["floor lamp","lampada da terra"],
+  ["ceiling light","luce da soffitto"],["chandelier","lampadario"],["lampshade","paralume"],
+  ["fan","ventilatore"],["fireplace","camino"],["radiator","termosifone"],
+  // Household — kitchen
+  ["stove","fornello"],["oven","forno"],["microwave","microonde"],["toaster","tostapane"],
+  ["blender","frullatore"],["mixer","mixer"],["coffee maker","macchina del caffè"],
+  ["kettle","bollitore"],["refrigerator","frigorifero"],["freezer","congelatore"],
+  ["dishwasher","lavastoviglie"],["sink","lavandino"],["faucet","rubinetto"],
+  ["countertop","piano di lavoro"],["cutting board","tagliere"],["colander","scolapasta"],
+  ["strainer","colino"],["grater","grattugia"],["peeler","sbucciapatate"],["whisk","frusta"],
+  ["spatula","spatola"],["ladle","mestolo"],["tongs","pinze"],["rolling pin","mattarello"],
+  ["measuring cup","misurino"],["measuring spoon","cucchiaio dosatore"],
+  // Household — bathroom
+  ["toilet","water"],["bathtub","vasca da bagno"],["shower","doccia"],["shower head","doccino"],
+  ["sink","lavandino"],["mirror","specchio"],["towel","asciugamano"],["toothbrush","spazzolino"],
+  ["toothpaste","dentifricio"],["soap","sapone"],["soap dispenser","erogatore di sapone"],
+  ["shampoo","shampoo"],["razor","rasoio"],["hair dryer","asciugacapelli"],["plunger","sturalavandini"],
+  // Household — decor & misc
+  ["pillow","cuscino"],["cushion","cuscino"],["blanket","coperta"],["quilt","trapunta"],
+  ["bedsheet","lenzuolo"],["sleeping bag","sacco a pelo"],["doormat","zerbino"],
+  ["umbrella","ombrello"],["coat rack","attaccapanni"],["hanger","gruccia"],
+  ["key rack","portachiavi"],["trash can","cestino"],["recycling bin","cassetto riciclaggio"],
+  ["laundry basket","cestello della biancheria"],["ironing board","asse da stiro"],["iron","ferro da stiro"],
+  ["vacuum cleaner","aspirapolvere"],["broom","scopa"],["mop","mocio"],["bucket","secchio"],
+  ["dustpan","pattumiera"],["safety pin","spilla di sicurezza"],["clothespin","molletta"],
+  // Tableware
+  ["plate","piatto"],["bowl","ciotola"],["cup","tazza"],["mug","tazzone"],["glass","bicchiere"],
+  ["wine glass","calice"],["champagne flute","flute"],["mug","tazza"],["bottle","bottiglia"],
+  ["jug","brocca"],["pitcher","brocca"],["thermos","thermos"],["flask","fiaschetta"],
+  ["tray","vassoio"],["platter","piatto da portata"],["chopsticks","bacchette"],
+  ["fork","forchetta"],["knife","coltello"],["spoon","cucchiaio"],["teaspoon","cucchiaino"],
+  ["serving spoon","cucchiaio da portata"],["soup spoon","cucchiaio da minestra"],
+  // Cookware
+  ["frying pan","padella"],["wok","wok"],["saucepan","pentola"],["stockpot","pentolone"],
+  ["pressure cooker","pentola a pressione"],["crock pot","pentola a cottura lenta"],
+  ["baking sheet","teglia da forno"],["cake pan","teglia per torte"],["muffin tin","stampo per muffin"],
+  ["grill pan","padella per griglia"],["casserole dish","pirofile"],
+  // Electronics
+  ["smartphone","smartphone"],["phone","telefono"],["tablet","tablet"],["laptop","portatile"],
+  ["computer","computer"],["desktop computer","computer desktop"],["monitor","monitor"],
+  ["screen","schermo"],["television","televisione"],["tv","tv"],["projector","proiettore"],
+  ["keyboard","tastiera"],["mouse","mouse"],["touchpad","trackpad"],["webcam","webcam"],
+  ["microphone","microfono"],["headphones","cuffie"],["earbuds","auricolari"],["speaker","altoparlante"],
+  ["bluetooth speaker","cassa bluetooth"],["soundbar","soundbar"],["router","router"],
+  ["modem","modem"],["charger","caricabatterie"],["power bank","power bank"],
+  ["cable","cavo"],["usb cable","cavo usb"],["hdmi cable","cavo hdmi"],["headphone jack","jack cuffie"],
+  ["battery","batteria"],["remote control","telecomando"],["game controller","controller"],
+  ["joystick","joystick"],["camera","fotocamera"],["dslr camera","reflex"],["camcorder","videocamera"],
+  ["drone","drone"],["printer","stampante"],["scanner","scanner"],["fax","fax"],
+  ["calculator","calcolatrice"],["e-reader","lettore ebook"],["smartwatch","smartwatch"],
+  ["radio","radio"],["record player","giradischi"],["cassette player","registratore"],
+  ["cd player","lettore cd"],
+  // Clothing
+  ["shirt","camicia"],["t-shirt","maglietta"],["blouse","camicetta"],["polo shirt","polo"],
+  ["sweater","maglione"],["cardigan","cardigan"],["hoodie","felpa"],["sweatshirt","felpa"],
+  ["jacket","giacca"],["coat","cappotto"],["raincoat","impermeabile"],["windbreaker","windbreaker"],
+  ["parka","parka"],["blazer","blazer"],["vest","gilet"],["tank top","canotta"],
+  ["dress","vestito"],["gown","abito lungo"],["skirt","gonna"],["miniskirt","minigonna"],
+  ["pants","pantaloni"],["trousers","pantaloni"],["jeans","jeans"],["shorts","pantaloncini"],
+  ["leggings","leggings"],["underwear","biancheria intima"],["bra","reggiseno"],
+  ["socks","calzini"],["stockings","collant"],["tie","cravatta"],["bow tie","papillon"],
+  ["scarf","sciarpa"],["gloves","guanti"],["mittens","mitene"],["belt","cintura"],
+  ["hat","cappello"],["cap","berretto"],["beanie","berretto aderente"],["cowboy hat","cappello da cowboy"],
+  ["helmet","casco"],["sun hat","cappello da sole"],
+  // Shoes
+  ["shoes","scarpe"],["sneakers","sneaker"],["running shoes","scarpe da running"],
+  ["boots","stivali"],["ankle boots","stivaletti"],["rain boots","stivali di gomma"],
+  ["sandals","sandali"],["flip flops","infradito"],["heels","tacchi"],["dress shoes","scarpe eleganti"],
+  ["slippers","pantofole"],["clogs","zoccoli"],["ice skates","pattini da ghiaccio"],
+  ["roller skates","pattini a rotelle"],
+  // Accessories
+  ["sunglasses","occhiali da sole"],["glasses","occhiali"],["watch","orologio"],["necklace","collana"],
+  ["bracelet","bracciale"],["ring","anello"],["earrings","orecchini"],["handbag","borsa"],
+  ["purse","borsa"],["backpack","zaino"],["briefcase","cartella"],["suitcase","valigia"],
+  ["duffel bag","borsa sportiva"],["tote bag","shopper"],["wallet","portafoglio"],
+  ["coin purse","portamonete"],["fanny pack","marsupio"],["tie clip","fermacravatta"],
+  ["cufflinks","gemelli"],["brooch","spilla"],["hairpin","forcina"],
+  // Vehicles
+  ["car","automobile"],["sedan","berlina"],["sports car","auto sportiva"],["convertible","cabriolet"],
+  ["suv","suv"],["minivan","monovolume"],["truck","camion"],["pickup truck","pick-up"],
+  ["van","furgone"],["bus","autobus"],["school bus","scuolabus"],["taxi","taxi"],
+  ["ambulance","ambulanza"],["police car","auto della polizia"],["fire truck","autopompa"],
+  ["motorcycle","motocicletta"],["motor scooter","scooter"],["moped","ciclomotore"],
+  ["bicycle","bicicletta"],["mountain bike","mountain bike"],["unicycle","monociclo"],
+  ["train","treno"],["subway","metropolitana"],["tram","tram"],["streetcar","tram"],
+  ["airplane","aeroplano"],["helicopter","elicottero"],["hot air balloon","mongolfiera"],
+  ["boat","barca"],["sailboat","barca a vela"],["yacht","yacht"],["canoe","canoa"],
+  ["kayak","kayak"],["ferry","traghetto"],["ship","nave"],["cruise ship","nave da crociera"],
+  ["rocket","razzo"],["tractor","trattore"],["forklift","carrello elevatore"],
+  ["golf cart","carrello da golf"],["rv","camper"],["carriage","carrozza"],
+  // Tools
+  ["hammer","martello"],["screwdriver","cacciavite"],["wrench","chiave inglese"],
+  ["pliers","pinze"],[" Adjustable wrench","chiave regolabile"],["pipe wrench","chiave a tubo"],
+  ["saw","sega"],["chainsaw","motosega"],["hacksaw","sega a meta"],["circular saw","sega circolare"],
+  ["drill","trapano"],["power drill","trapano elettrico"],["nail","chiodo"],["screw","vite"],
+  ["bolt","bullone"],["nut","dado"],["washer","rondella"],["tape measure","metro a nastro"],
+  ["ruler","righello"],["level","livella"],["square","squadra"],["compass","compasso"],
+  ["ladder","scala"],["step ladder","scala a libretto"],["stool","sgabello"],
+  ["shovel","pala"],["spade","vanga"],["rake","rastrello"],["hoe","zappa"],
+  ["pickaxe","piccone"],["axe","ascia"],["hatchet","accetta"],["trowel","cazzuola"],
+  ["broom","scopa"],["pressure washer","idropulitrice"],["glue gun","pistola per colla"],
+  ["soldering iron","saldatore"],["multimeter","multimetro"],["flashlight","torcia"],
+  ["work light","lampada da lavoro"],["tool box","cassetta degli attrezzi"],
+  // Sports & outdoor
+  ["soccer ball","pallone"],["basketball","pallacanestro"],["football","pallone da football"],
+  ["baseball","pallone da baseball"],["tennis ball","pallina da tennis"],["volleyball","pallavolo"],
+  ["golf ball","pallina da golf"],["ping pong ball","pallina da ping pong"],
+  ["racket","racchetta"],["tennis racket","racchetta da tennis"],["baseball bat","mazza da baseball"],
+  ["golf club","mazza da golf"],["hockey stick","stecca da hockey"],["cricket bat","mazza da cricket"],
+  ["skateboard","skateboard"],["roller skates","pattini a rotelle"],["skis","sci"],
+  ["snowboard","snowboard"],["surfboard","tavola da surf"],["paddleboard","tavola da paddle"],
+  ["kayak","kayak"],["canoe","canoa"],["bicycle","bicicletta"],["treadmill","tapis roulant"],
+  ["dumbbell","manubrio"],["barbell","bilanciere"],["kettlebell","kettlebell"],
+  ["yoga mat","tappetino da yoga"],["jump rope","corda per saltare"],["boxing gloves","guanti da boxe"],
+  ["helmet","casco"],["knee pads","ginocchiere"],["goggles","occhialini"],
+  ["fishing rod","canna da pesca"],["tent","tenda da campeggio"],["sleeping bag","sacco a pelo"],
+  ["backpack","zaino"],["compass","bussola"],["binoculars","binocolo"],["telescope","telescopio"],
+  ["torch","torcia"],["canteen","borraccia"],
+  // Music instruments
+  ["guitar","chitarra"],["electric guitar","chitarra elettrica"],["acoustic guitar","chitarra acustica"],
+  ["bass guitar","basso"],["piano","pianoforte"],["keyboard","tastiera"],["organ","organo"],
+  ["violin","violino"],["viola","viola"],["cello","violoncello"],["double bass","contrabbasso"],
+  ["drums","batteria"],["snare drum","rullante"],["cymbal","piatto"],["marimba","marimba"],
+  ["xylophone","xilofono"],["trumpet","tromba"],["trombone","trombone"],["saxophone","sassofono"],
+  ["flute","flauto"],["clarinet","clarinetto"],["harmonica","armonica"],["accordion","fisarmonica"],
+  ["bagpipe","cornamusa"],["banjo","banjo"],["ukulele","ukulele"],["harp","arpa"],["tuning fork","diapason"],
+  // Toys & games
+  ["teddy bear","orsacchiotto"],["doll","bambola"],["action figure","action figure"],
+  ["toy car","macchinina"],["toy train","trenino"],["puzzle","puzzle"],["rubik's cube","cubo di rubik"],
+  ["domino","domino"],["chess board","scacchiera"],["chess piece","pezzo degli scacchi"],
+  ["playing cards","carte da gioco"],["dice","dadi"],["jigsaw puzzle","puzzle"],
+  ["yo-yo","yo-yo"],["kite","aquilone"],["pinwheel","molinetto"],["balloon","palloncino"],
+  ["video game controller","controller videogiochi"],["arcade machine","flipper"],
+  ["toy blocks","mattoncini"],["lego","lego"],
+  // Plants & nature
+  ["tree","albero"],["oak tree","quercia"],["pine tree","pino"],["palm tree","palma"],
+  ["willow tree","salice"],["flower","fiore"],["rose","rosa"],["tulip","tulipano"],
+  ["daisy","margherita"],["sunflower","girasole"],["lily","giglio"],["orchid","orchidea"],
+  ["lavender","lavanda"],["daffodil","narciso"],["poppy","papavero"],["cactus","cactus"],
+  ["succulent","succulenta"],["fern","felce"],["moss","muschio"],["ivy","edera"],
+  ["bush","cespuglio"],["hedge","siepe"],["grass","erba"],["leaf","foglia"],["branch","ramo"],
+  ["root","radice"],["seed","seme"],["acorn","ghianda"],["pinecone","pigna"],
+  ["rock","roccia"],["stone","pietra"],["pebble","ciottolo"],["sand","sabbia"],
+  ["dirt","terra"],["mud","fango"],["snow","neve"],["ice","ghiaccio"],["icicle","ghiacciolo"],
+  ["water","acqua"],["wave","onda"],["waterfall","cascata"],["pond","stagno"],["lake","lago"],
+  ["river","fiume"],["ocean","oceano"],["mountain","montagna"],["hill","collina"],
+  ["cliff","scogliera"],["cave","grotta"],["volcano","vulcano"],["island","isola"],
+  ["beach","spiaggia"],["forest","foresta"],["desert","deserto"],["field","campo"],
+  ["cloud","nuvola"],["rainbow","arcobaleno"],["lightning","fulmine"],["moon","luna"],
+  ["sun","sole"],["star","stella"],
+  // Buildings & structures
+  ["house","casa"],["cottage","cottage"],["cabin","capanina"],["mansion","villa"],
+  ["apartment building","condominio"],["skyscraper","grattacielo"],["church","chiesa"],
+  ["cathedral","cattedrale"],["castle","castello"],["palace","palazzo"],["tower","torre"],
+  ["bridge","ponte"],["suspension bridge","ponte sospeso"],["dam","diga"],
+  ["fountain","fontana"],["monument","monumento"],["statue","statua"],["sculpture","scultura"],
+  ["obelisk","obelisco"],["totem pole","totem"],["windmill","mulino a vento"],
+  ["lighthouse","faro"],["barn","fienile"],["greenhouse","serra"],["garage","garage"],
+  ["shed","capannone"],["doghouse","cuccia"],["playground","parco giochi"],
+  ["stadium","stadio"],["swimming pool","piscina"],["fence","recinto"],["wall","muro"],
+  ["brick wall","muro di mattoni"],["stone wall","muro di pietra"],
+  // Office & school
+  ["book","libro"],["notebook","quaderno"],["binder","raccoglitore"],["folder","cartellina"],
+  ["envelope","busta"],["letter","lettera"],["sticky note","post-it"],["calendar","calendario"],
+  ["pen","penna"],["ballpoint pen","penna a sfera"],["fountain pen","penna stilografica"],
+  ["pencil","matita"],["mechanical pencil","matita automatica"],["colored pencil","matita colorata"],
+  ["marker","evidenziatore"],["highlighter","evidenziatore"],["crayon","pastello a cera"],
+  ["chalk","gesso"],["eraser","gomma"],["sharpener","temperino"],["ruler","righello"],
+  ["protractor","gomitolo"],["compass","compasso"],["stapler","cucitrice"],["paper clips","clip"],
+  ["hole punch","foratrice"],["scissors","forbici"],["glue stick","barretta di colla"],
+  ["tape","nastro adesivo"],["whiteboard","lavagna"],["blackboard","lavagna nera"],
+  ["projector","proiettore"],["globe","mappamondo"],["map","mappa"],["atlas","atlante"],
+  ["dictionary","dizionario"],["textbook","libro di testo"],
+  // Art supplies
+  ["paintbrush","pennello"],["easel","cavalletto"],["palette","tavolozza"],["canvas","tela"],
+  ["paint","vernice"],["watercolor","acquerello"],["oil paint","vernice a olio"],
+  ["clay","argilla"],["pottery wheel","tornio da vasaio"],["sculpting tool","strumento da scultura"],
+  // Medical & safety
+  ["stethoscope","stetoscopio"],["thermometer","termometro"],["syringe","siringa"],
+  ["band-aid","cerotto"],["first aid kit","cassetta di pronto soccorso"],["mask","mascherina"],
+  ["gloves","guanti"],["safety glasses","occhiali di sicurezza"],["hard hat","casco da cantiere"],
+  ["fire extinguisher","estintore"],["smoke detector","rilevatore di fumo"],
+  // Misc
+  ["money","soldi"],["coin","moneta"],["banknote","banconota"],["credit card","carta di credito"],
+  ["wallet","portafoglio"],["keys","chiavi"],["keychain","portachiavi"],["lock","lucchetto"],
+  ["padlock","lucchetto"],["chain","catena"],["rope","corda"],["string","spago"],
+  ["wire","filo"],["cable","cavo"],["pipe","tubo"],["hose","tubo da giardino"],
+  ["valve","valvola"],["wheel","ruota"],["tire","pneumatico"],["gear","ingranaggio"],
+  ["spring","molla"],["bearing","cuscinetto"],["bolt","bullone"],["screw","vite"],
+  ["clock","orologio"],["hourglass","clessidra"],["abacus","abaco"],["compass","bussola"],
+  ["scale","bilancia"],["thermometer","termometro"],["barometer","barometro"],
+  ["seismograph","sismografo"],["microscope","microscopio"],["telescope","telescopio"],
+  ["magnet","magnete"],["battery","batteria"],["solar panel","pannello solare"],
+  ["wind turbine","turbina eolica"],["antenna","antenna"],["satellite dish","parabola"],
+  ["mailbox","cassetta delle lettere"],["fence","recinto"],["gate","cancello"],
+  ["doorbell","campanello"],["knob","manopola"],["handle","maniglia"],["switch","interruttore"],
+  ["outlet","presa"],["plug","spina"],["light bulb","lampadina"],["circuit breaker","interruttore automatico"]
+];
+
 // Category metadata: each class → category → color + icon
 const CATEGORIES = {
   person:      { color: "#FF453A", icon: "👤" }, // red
@@ -771,6 +1056,11 @@ let sam2Loading = false;
 let lastSam2Mask = null;       // { mask: Uint8Array, width, height, color } — pixel-accurate mask for selected object
 let sam2OutlineOnly = null;    // Path2D or array of points for the mask outline
 
+// CLIP (zero-shot classifier) — lazy-loaded on first tap
+let clipPipeline = null;       // transformers.js zero-shot-image-classification pipeline
+let clipLoadingPromise = null;
+let clipTextEmbeddings = null; // pre-computed text embeddings tensor [N, 512]
+
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
 const video = $("video");
@@ -802,7 +1092,7 @@ const toast     = $("toast");
 // Loads ON DEMAND on first tap (40MB download, then cached in IndexedDB).
 // Subsequent taps: ~200-500ms inference on iPhone Safari with WebGL.
 
-const SAM2_MODEL_ID = "Xenova/sam2-hiera-tiny";  // smallest SAM2 variant (~40MB)
+const SAM2_MODEL_ID = "Xenova/sam2-hiera-small";  // better quality than tiny (~80MB fp32)
 
 async function loadSam2() {
   if (sam2Pipeline) return sam2Pipeline;
@@ -819,10 +1109,19 @@ async function loadSam2() {
       tfjs.env.useBrowserCache = true;
 
       // Load SAM2 pipeline (image + prompt → mask)
-      const pipeline = await tfjs.Sam2Pipeline.from_pretrained(SAM2_MODEL_ID, {
-        dtype: "q8",  // quantized for smaller download
-        device: "wasm", // WebAssembly backend (more reliable than WebGL for SAM2)
-      });
+      let pipeline;
+      try {
+        pipeline = await tfjs.Sam2Pipeline.from_pretrained(SAM2_MODEL_ID, {
+          dtype: "fp32",  // full precision for best mask quality
+          device: "webgpu", // WebGPU backend (much faster than wasm, with fallback)
+        });
+      } catch (gpuErr) {
+        console.warn("[sam2] WebGPU failed, falling back to wasm", gpuErr);
+        pipeline = await tfjs.Sam2Pipeline.from_pretrained(SAM2_MODEL_ID, {
+          dtype: "q8",
+          device: "wasm",
+        });
+      }
       sam2Pipeline = pipeline;
       console.log("[sam2] loaded");
       setSam2Status("");
@@ -1014,16 +1313,117 @@ function drawSam2Mask(mask, w, h, color, videoW, videoH) {
     ctx.lineCap = "round";
     ctx.shadowColor = color;
     ctx.shadowBlur = 16;
+    // Smooth curve through ALL points using Catmull-Rom → Bezier conversion
+    // This produces pixel-accurate smooth outlines instead of jagged line segments
     ctx.beginPath();
     ctx.moveTo(pts[0][0] * scaleX, pts[0][1] * scaleY);
-    // Smooth curve through points (skip every 2nd point for smoothness)
-    for (let i = 1; i < pts.length; i += 2) {
-      const p = pts[i];
-      ctx.lineTo(p[0] * scaleX, p[1] * scaleY);
+    const n = pts.length;
+    for (let i = 0; i < n; i++) {
+      const p0 = pts[(i - 1 + n) % n];
+      const p1 = pts[i];
+      const p2 = pts[(i + 1) % n];
+      const p3 = pts[(i + 2) % n];
+      // Catmull-Rom to cubic Bezier conversion (tension = 0.5)
+      const cp1x = (p1[0] + (p2[0] - p0[0]) / 6) * scaleX;
+      const cp1y = (p1[1] + (p2[1] - p0[1]) / 6) * scaleY;
+      const cp2x = (p2[0] - (p3[0] - p1[0]) / 6) * scaleX;
+      const cp2y = (p2[1] - (p3[1] - p1[1]) / 6) * scaleY;
+      const x = p2[0] * scaleX;
+      const y = p2[1] * scaleY;
+      ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, x, y);
     }
     ctx.closePath();
     ctx.stroke();
     ctx.restore();
+  }
+}
+
+// ---------- CLIP zero-shot classifier (500+ vocabulary, lazy-loaded) ----------
+// CLIP compares an image to a list of text labels and returns the best match.
+// Unlike MobileNet (fixed 1000 ImageNet classes), CLIP can recognize ANY object
+// in our curated 500+ vocabulary — and we can extend it freely.
+
+const CLIP_MODEL_ID = "Xenova/clip-vit-base-patch32";
+
+async function loadClip() {
+  if (clipPipeline) return clipPipeline;
+  if (clipLoadingPromise) return clipLoadingPromise;
+
+  setSam2Status(currentLang === "it" ? "Caricamento CLIP…" : "Loading CLIP…");
+
+  clipLoadingPromise = (async () => {
+    try {
+      // Dynamic import (shares the same module as SAM2 if already loaded)
+      const tfjs = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2");
+      tfjs.env.allowLocalModels = false;
+      tfjs.env.useBrowserCache = true;
+
+      // Use the zero-shot-image-classification pipeline
+      const pipeline = await tfjs.pipeline("zero-shot-image-classification", CLIP_MODEL_ID, {
+        dtype: "q8",  // quantized for ~80MB download (vs 600MB fp32)
+        device: "wasm",
+      });
+      clipPipeline = pipeline;
+      console.log("[clip] loaded, vocab size:", VOCABULARY.length);
+      setSam2Status("");
+      return pipeline;
+    } catch (err) {
+      console.error("[clip] load failed", err);
+      setSam2Status("");
+      clipLoadingPromise = null;
+      throw err;
+    }
+  })();
+
+  return clipLoadingPromise;
+}
+
+// Run CLIP on a cropped region of the video frame.
+// Returns { label, labelIt, score } or null on failure.
+async function runClip(cropX, cropY, cropW, cropH) {
+  try {
+    const pipeline = await loadClip();
+    if (!pipeline) return null;
+
+    // Crop the video frame to the bounding box region
+    const w = video.videoWidth, h = video.videoHeight;
+    if (!w || !h) return null;
+
+    // Clamp crop to video bounds
+    const cx = Math.max(0, Math.floor(cropX));
+    const cy = Math.max(0, Math.floor(cropY));
+    const cw = Math.min(w - cx, Math.floor(cropW));
+    const ch = Math.min(h - cy, Math.floor(cropH));
+    if (cw < 10 || ch < 10) return null;
+
+    // Create a canvas with the cropped image
+    const tmp = document.createElement("canvas");
+    tmp.width = cw; tmp.height = ch;
+    const tctx = tmp.getContext("2d");
+    tctx.drawImage(video, cx, cy, cw, ch, 0, 0, cw, ch);
+
+    // Convert to data URL for CLIP
+    const dataUrl = tmp.toDataURL("image/jpeg", 0.85);
+
+    // Run CLIP with our vocabulary as candidate labels
+    // The pipeline handles text embedding internally
+    const labels = VOCABULARY.map(([en]) => `a photo of a ${en}`);
+    const output = await pipeline(dataUrl, labels);
+
+    // output: [{ score: 0.9, label: "a photo of a cup" }, ...]
+    if (output && output.length > 0) {
+      const top = output[0];
+      // Extract the original English label from the prompt
+      const enLabel = top.label.replace(/^a photo of a /, "");
+      // Find the Italian translation
+      const idx = VOCABULARY.findIndex(([en]) => en === enLabel);
+      const itLabel = idx >= 0 ? VOCABULARY[idx][1] : enLabel;
+      return { label: enLabel, labelIt: itLabel, score: top.score };
+    }
+    return null;
+  } catch (err) {
+    console.error("[clip] inference failed", err);
+    return null;
   }
 }
 
@@ -1606,7 +2006,7 @@ function handleTap(clientX, clientY) {
     }
   }
   if (best) {
-    // Hit a COCO box → show that object card
+    // Hit a COCO box → show that object card immediately
     selectedDetection = best;
     showObjectCard(best);
     drawDetections();
@@ -1619,7 +2019,11 @@ function handleTap(clientX, clientY) {
       drawDetections();
     }, 12000);
 
-    // Trigger SAM2 in the background for pixel-accurate mask of this object
+    // In background: run CLIP for a more specific label (500+ vocabulary)
+    const [bx, by, bw, bh] = best.bbox;
+    runClipForLabel(best, bx, by, bw, bh);
+
+    // In background: run SAM2 for pixel-accurate mask
     if (coords) runSam2ForObject(best, coords.vx, coords.vy);
   } else if (lastMobilenet.length > 0) {
     // No COCO box hit → fall back to MobileNet top-1 prediction for the whole frame
@@ -1631,8 +2035,32 @@ function handleTap(clientX, clientY) {
       hideObjectCard();
     }, 8000);
 
-    // Also run SAM2 at the tap point if available — gives a mask even for non-COCO objects
+    // Run CLIP on the whole frame for a better label
+    runClipForLabel(null, 0, 0, video.videoWidth, video.videoHeight);
+
+    // Also run SAM2 at the tap point — gives a mask even for non-COCO objects
     if (coords) runSam2ForObject(null, coords.vx, coords.vy);
+  }
+}
+
+// Run CLIP on the cropped region and update the object card with the specific label
+async function runClipForLabel(detection, cropX, cropY, cropW, cropH) {
+  try {
+    const result = await runClip(cropX, cropY, cropW, cropH);
+    if (!result) return;
+    // Verify the selection is still active
+    if (selectedDetection !== detection && detection !== null) return;
+    // Only update if CLIP's confidence is decent (> 15%)
+    if (result.score < 0.15) return;
+    // Update the card with the CLIP label (more specific than COCO)
+    const label = currentLang === "it" ? result.labelIt : result.label;
+    objName.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+    objMeta.textContent = `${t("confidence")} · ${Math.round(result.score * 100)}%`;
+    _lastSpoken = "";  // reset so TTS will speak the new label
+    speakCurrent();
+    showToast(currentLang === "it" ? `CLIP: ${result.labelIt}` : `CLIP: ${result.label}`);
+  } catch (err) {
+    console.warn("[clip] label update failed", err);
   }
 }
 
